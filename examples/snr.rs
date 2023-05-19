@@ -1,53 +1,39 @@
-use std::ops::Add;
-
 use indicatif::ProgressIterator;
 use muscat::processors::Snr;
 use muscat::quicklog::{BatchIter, Log};
-use rayon::prelude::{ParallelBridge, ParallelIterator};
 use muscat::util::{progress_bar, save_array};
-
-struct Analysis {
-    snr: Snr,
-}
-
-impl Analysis {
-    fn new(leakage_size: usize) -> Self {
-        Self {
-            snr: Snr::new(leakage_size, 256),
-        }
-    }
-}
-
-impl Add<Analysis> for Analysis {
-    type Output = Self;
-
-    fn add(self, rhs: Analysis) -> Self::Output {
-        Self {
-            snr: self.snr + rhs.snr
-        }
-    }
-}
+use rayon::prelude::{ParallelBridge, ParallelIterator};
 
 fn main() {
     // Open log file
+    // This uses logs from the python quicklog library.
     let log = Log::<i16>::new("log").unwrap();
     let leakage_size = log.leakage_size();
     let trace_count = log.len();
 
-    let result: Analysis = log.into_iter()
+    let result: Snr = log
+        .into_iter()
         .progress_with(progress_bar(trace_count))
         // Process records sharing same leakage numpy files by batches, so batch files get read only
         // once.
-        .batches(|record| record.bytes("new")[0])
-        // Use rayon to make processing multithreaded
+        // Log entries may have lots of information. The closure argument here extracts the data
+        // required for the analysis, in this case the first byte of an hexadecimal string in the
+        // "data" column of the record.
+        .batches(|record| record.bytes("data")[0])
+        // Use `par_bridge` from rayon crate to make processing multithreaded
         .par_bridge()
-        .fold(|| Analysis::new(leakage_size), |mut analysis, batch| {
-            for trace in batch {
-                analysis.snr.process(&trace.leakage, trace.value as usize)
-            }
-            analysis
+        .fold(
+            || Snr::new(leakage_size, 256),
+            |mut snr, batch| {
+                for trace in batch {
+                    snr.process(&trace.leakage, trace.value as usize)
+                }
+                snr
+            },
+        )
         // Merge the results of each processing thread
-        }).reduce(|| Analysis::new(leakage_size), |a, b| a + b);
+        .reduce(|| Snr::new(leakage_size, 256), |a, b| a + b);
 
-    save_array("result.npy", &result.snr.snr()).unwrap();
+    // Save the resulting SNR trace to a numpy file
+    save_array("result.npy", &result.snr()).unwrap();
 }

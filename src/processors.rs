@@ -2,7 +2,7 @@ use std::ops::Add;
 
 use ndarray::{Array1, Array2, s};
 
-/// Process traces to calculate mean and variance
+/// Processes traces to calculate mean and variance
 #[derive(Clone)]
 pub struct MeanVar {
     /// Sum of traces
@@ -66,6 +66,7 @@ impl Add for MeanVar {
     }
 }
 
+/// Processes traces to calculate the Signal-to-Noise Ratio
 #[derive(Clone)]
 pub struct Snr {
     mean_var: MeanVar,
@@ -89,6 +90,7 @@ impl Snr {
         }
     }
 
+    /// Processes an input trace to update internal accumulators
     pub fn process<T: Into<i64> + Copy>(&mut self, trace: &Array1<T>, class: usize) {
         self.mean_var.process(trace);
         let size = self.part_acc_1.shape()[1];
