@@ -1,6 +1,6 @@
 # Multithreaded Side Channel Attacks Tool
 
-An experimental side channel attacks libray written in Rust.
+An experimental side channel attacks library written in Rust.
 
 ## License
 
