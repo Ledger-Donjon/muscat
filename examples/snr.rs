@@ -26,7 +26,9 @@ fn main() {
             || Snr::new(leakage_size, 256),
             |mut snr, batch| {
                 for trace in batch {
-                    snr.process(&trace.leakage, trace.value as usize)
+                    // `process` takes an `ArrayView1` argument, which makes possible to pass a
+                    // trace slice: `traces.leakage.slice(s![100..])` for instance.
+                    snr.process(&trace.leakage.view(), trace.value as usize)
                 }
                 snr
             },

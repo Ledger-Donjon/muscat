@@ -1,6 +1,6 @@
 use std::ops::Add;
 
-use ndarray::{Array1, Array2, s};
+use ndarray::{Array1, Array2, s, ArrayView1};
 
 /// Processes traces to calculate mean and variance
 #[derive(Clone)]
@@ -28,7 +28,7 @@ impl MeanVar {
     }
 
     /// Processes an input trace to update internal accumulators
-    pub fn process<T: Into<i64> + Copy>(&mut self, trace: &Array1<T>) {
+    pub fn process<T: Into<i64> + Copy>(&mut self, trace: &ArrayView1<T>) {
         let size = self.acc_1.len();
         for i in 0..size {
             let x = trace[i].into();
@@ -91,7 +91,7 @@ impl Snr {
     }
 
     /// Processes an input trace to update internal accumulators
-    pub fn process<T: Into<i64> + Copy>(&mut self, trace: &Array1<T>, class: usize) {
+    pub fn process<T: Into<i64> + Copy>(&mut self, trace: &ArrayView1<T>, class: usize) {
         self.mean_var.process(trace);
         let size = self.part_acc_1.shape()[1];
         self.counters[class] += 1;
@@ -144,12 +144,12 @@ mod tests {
     #[test]
     fn test_mean_var() {
         let mut processor = MeanVar::new(4);
-        processor.process(&array![28038i16, 22066i16, -20614i16, -9763i16]);
+        processor.process(&array![28038i16, 22066i16, -20614i16, -9763i16].view());
         assert_eq!(processor.mean(), array![28038f64, 22066f64, -20614f64, -9763f64]);
         assert_eq!(processor.var(), array![0f64, 0f64, 0f64, 0f64]);
-        processor.process(&array![31377, -6950, -15666, 26773]);
-        processor.process(&array![24737, -18311, 24742, 17207]);
-        processor.process(&array![12974, -29255, -28798, 18988]);
+        processor.process(&array![31377, -6950, -15666, 26773].view());
+        processor.process(&array![24737, -18311, 24742, 17207].view());
+        processor.process(&array![12974, -29255, -28798, 18988].view());
         assert_eq!(processor.mean(), array![24281.5f64, -8112.5f64, -10084f64, 13301.25f64]);
         assert_eq!(processor.var(), array![48131112.25, 365776994.25, 426275924.0, 190260421.1875]);
     }
