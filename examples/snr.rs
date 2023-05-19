@@ -1,14 +1,10 @@
 use std::ops::Add;
 
 use indicatif::ProgressIterator;
-use processors::Snr;
-use quicklog::{BatchIter, Log};
+use muscat::processors::Snr;
+use muscat::quicklog::{BatchIter, Log};
 use rayon::prelude::{ParallelBridge, ParallelIterator};
-use util::{progress_bar, save_array};
-mod processors;
-mod quicklog;
-mod trace;
-mod util;
+use muscat::util::{progress_bar, save_array};
 
 struct Analysis {
     snr: Snr,
