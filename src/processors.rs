@@ -1,6 +1,6 @@
 use std::ops::Add;
 
-use ndarray::{Array1, Array2, s, ArrayView1};
+use ndarray::{s, Array1, Array2, ArrayView1};
 
 /// Processes traces to calculate mean and variance
 #[derive(Clone)]
@@ -10,7 +10,7 @@ pub struct MeanVar {
     /// Sum of square of traces
     acc_2: Array1<i64>,
     /// Number of traces processed
-    count: usize
+    count: usize,
 }
 
 impl MeanVar {
@@ -23,7 +23,7 @@ impl MeanVar {
         Self {
             acc_1: Array1::zeros(size),
             acc_2: Array1::zeros(size),
-            count: 0
+            count: 0,
         }
     }
 
@@ -45,12 +45,17 @@ impl MeanVar {
 
     /// Calculates and returns traces variance
     pub fn var(&self) -> Array1<f64> {
-        self.acc_1.iter().zip(self.acc_2.iter()).map(|(&acc_1, &acc_2)| {
-            let acc_1 = acc_1 as f64;
-            let acc_2 = acc_2 as f64;
-            let count = self.count as f64;
-            (acc_2 / count) - (acc_1 / count).powi(2)
-        }).collect()
+        self.acc_1
+            .iter()
+            .zip(self.acc_2.iter())
+            .map(|(&acc_1, &acc_2)| {
+                let acc_1 = acc_1 as f64;
+                let acc_2 = acc_2 as f64;
+                let count = self.count as f64;
+                (acc_2 / count) - (acc_1 / count).powi(2)
+            })
+            .collect()
+    }
 
     /// Number of traces processed
     pub fn count(&self) -> usize {
@@ -65,7 +70,7 @@ impl Add for MeanVar {
         Self {
             acc_1: self.acc_1 + rhs.acc_1,
             acc_2: self.acc_2 + rhs.acc_2,
-            count: self.count + rhs.count
+            count: self.count + rhs.count,
         }
     }
 }
@@ -76,21 +81,21 @@ pub struct Snr {
     mean_var: MeanVar,
     part_acc_1: Array2<i64>,
     part_acc_2: Array2<i64>,
-    counters: Array1<usize>
+    counters: Array1<usize>,
 }
 
 impl Snr {
     /// Creates a new SNR processor
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `size` - Size of the input traces
     pub fn new(size: usize, classes: usize) -> Self {
         Self {
             mean_var: MeanVar::new(size),
             part_acc_1: Array2::zeros((classes, size)),
             part_acc_2: Array2::zeros((classes, size)),
-            counters: Array1::zeros(classes)
+            counters: Array1::zeros(classes),
         }
     }
 
@@ -135,7 +140,10 @@ impl Add for Snr {
             mean_var: self.mean_var + rhs.mean_var,
             part_acc_1: self.part_acc_1 + rhs.part_acc_1,
             part_acc_2: self.part_acc_2 + rhs.part_acc_2,
-            counters: self.counters + rhs.counters
+            counters: self.counters + rhs.counters,
+        }
+    }
+}
 
 /// Welch's T-Test
 pub struct TTest {
@@ -198,13 +206,23 @@ mod tests {
     fn test_mean_var() {
         let mut processor = MeanVar::new(4);
         processor.process(&array![28038i16, 22066i16, -20614i16, -9763i16].view());
-        assert_eq!(processor.mean(), array![28038f64, 22066f64, -20614f64, -9763f64]);
+        assert_eq!(
+            processor.mean(),
+            array![28038f64, 22066f64, -20614f64, -9763f64]
+        );
         assert_eq!(processor.var(), array![0f64, 0f64, 0f64, 0f64]);
         processor.process(&array![31377, -6950, -15666, 26773].view());
         processor.process(&array![24737, -18311, 24742, 17207].view());
         processor.process(&array![12974, -29255, -28798, 18988].view());
-        assert_eq!(processor.mean(), array![24281.5f64, -8112.5f64, -10084f64, 13301.25f64]);
-        assert_eq!(processor.var(), array![48131112.25, 365776994.25, 426275924.0, 190260421.1875]);
+        assert_eq!(
+            processor.mean(),
+            array![24281.5f64, -8112.5f64, -10084f64, 13301.25f64]
+        );
+        assert_eq!(
+            processor.var(),
+            array![48131112.25, 365776994.25, 426275924.0, 190260421.1875]
+        );
+    }
 
     #[test]
     fn test_ttest() {
