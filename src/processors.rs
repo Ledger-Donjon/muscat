@@ -15,10 +15,10 @@ pub struct MeanVar {
 
 impl MeanVar {
     /// Creates a new mean and variance processor
-    /// 
+    ///
     /// # Arguments
-    /// 
-    /// * `new` - Number of samples per trace
+    ///
+    /// * `size` - Number of samples per trace
     pub fn new(size: usize) -> Self {
         Self {
             acc_1: Array1::zeros(size),
@@ -51,6 +51,10 @@ impl MeanVar {
             let count = self.count as f64;
             (acc_2 / count) - (acc_1 / count).powi(2)
         }).collect()
+
+    /// Number of traces processed
+    pub fn count(&self) -> usize {
+        self.count
     }
 }
 
@@ -132,14 +136,63 @@ impl Add for Snr {
             part_acc_1: self.part_acc_1 + rhs.part_acc_1,
             part_acc_2: self.part_acc_2 + rhs.part_acc_2,
             counters: self.counters + rhs.counters
+
+/// Welch's T-Test
+pub struct TTest {
+    mean_var_1: MeanVar,
+    mean_var_2: MeanVar,
+}
+
+impl TTest {
+    /// Creates a new Welch's T-Test processor.
+    ///
+    /// # Arguments
+    ///
+    /// * `size` - Number of samples per trace
+    pub fn new(size: usize) -> Self {
+        Self {
+            mean_var_1: MeanVar::new(size),
+            mean_var_2: MeanVar::new(size),
+        }
+    }
+
+    /// Processes an input trace to update internal accumulators.
+    pub fn process<T: Into<i64> + Copy>(&mut self, trace: &ArrayView1<T>, class: bool) {
+        if class {
+            self.mean_var_2.process(trace);
+        } else {
+            self.mean_var_1.process(trace);
+        }
+    }
+
+    /// Calculate and returns Welch's T-Test result.
+    pub fn ttest(&self) -> Array1<f64> {
+        // E(X1) - E(X2)
+        let q = self.mean_var_1.mean() - self.mean_var_2.mean();
+        // √(σ1²/N1 + σ2²/N2)
+        let d = ((self.mean_var_1.var() / self.mean_var_1.count() as f64)
+            + (self.mean_var_2.var() / self.mean_var_2.count() as f64))
+            .mapv(f64::sqrt);
+        q / d
+    }
+}
+
+impl Add for TTest {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            mean_var_1: self.mean_var_1 + rhs.mean_var_1,
+            mean_var_2: self.mean_var_2 + rhs.mean_var_2,
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use ndarray::array;
     use super::MeanVar;
+    use crate::processors::TTest;
+    use ndarray::array;
 
     #[test]
     fn test_mean_var() {
@@ -152,5 +205,33 @@ mod tests {
         processor.process(&array![12974, -29255, -28798, 18988].view());
         assert_eq!(processor.mean(), array![24281.5f64, -8112.5f64, -10084f64, 13301.25f64]);
         assert_eq!(processor.var(), array![48131112.25, 365776994.25, 426275924.0, 190260421.1875]);
+
+    #[test]
+    fn test_ttest() {
+        let mut processor = TTest::new(4);
+        let traces = [
+            array![77, 137, 51, 91],
+            array![72, 61, 91, 83],
+            array![39, 49, 52, 23],
+            array![26, 114, 63, 45],
+            array![30, 8, 97, 91],
+            array![13, 68, 7, 45],
+            array![17, 181, 60, 34],
+            array![43, 88, 76, 78],
+            array![0, 36, 35, 0],
+            array![93, 191, 49, 26],
+        ];
+        for (i, trace) in traces.iter().enumerate() {
+            processor.process(&trace.view(), i % 3 == 0);
+        }
+        assert_eq!(
+            processor.ttest(),
+            array![
+                -1.0910344547297484,
+                -5.524921845887032,
+                0.29385284736362266,
+                0.23308466737856662
+            ]
+        );
     }
 }
