@@ -1,3 +1,5 @@
+//! Load and iterate over traces and data from [quicklog](https://github.com/Ledger-Donjon/quicklog) log files.
+
 use ndarray::Array1;
 use npyz::{Deserialize, NpyFile};
 use serde_json::map::IntoIter;
@@ -262,7 +264,7 @@ impl CachedLoader {
     }
 }
 
-/// Holds a trace batch file content and a list offset in the file, plus the
+/// Holds a trace batch file content and an offset list in the file, plus the
 /// data associated to each trace.
 ///
 /// This can be created by [BatchIterator].
@@ -296,7 +298,7 @@ impl<T: Deserialize, U> IntoIterator for Batch<T, U> {
     }
 }
 
-/// Iterates log files to generate [Batch] that groups traces by batch files.
+/// Iterates log files to generate [`Batch`] that groups traces by batch files.
 ///
 /// `T` is the type of the elements in the leakage arrays.
 /// `U` is the type of data associated to each leakage.

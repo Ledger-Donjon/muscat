@@ -1,3 +1,5 @@
+//! Defines the [`Trace`] storage structure.
+
 use ndarray::Array1;
 
 /// A side channel leakage record associated to its leakage data.

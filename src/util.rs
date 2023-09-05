@@ -1,3 +1,5 @@
+//! Convenient utility functions.
+
 use std::{
     fs::File,
     io::{self, BufWriter},
@@ -32,10 +34,10 @@ where
     writer.finish()
 }
 
-/// Reads a [NpyFile] as a [Array1]
+/// Reads a [`NpyFile`] as a [`Array1`]
 ///
-/// This does the same as [NpyFile.into_vec] but faster, as this method reserves the resulting
-/// vector to the final size directly instead of relying on the `collect`. It however panics in
+/// This does the same as [`NpyFile.into_vec`] but faster, as this method reserves the resulting
+/// vector to the final size directly instead of relying on `collect`. It however panics in
 /// case of IO error.
 pub fn read_array_1_from_npy_file<T: Deserialize, R: std::io::Read>(npy: NpyFile<R>) -> Array1<T> {
     let mut v: Vec<T> = Vec::new();
@@ -44,6 +46,12 @@ pub fn read_array_1_from_npy_file<T: Deserialize, R: std::io::Read>(npy: NpyFile
     Array::from_vec(v)
 }
 
+/// Writes an [`ndarray::ArrayBase`] to a new file, in npy format.
+///
+/// # Arguments
+///
+/// * `path` - Output file path. If a file already exists, it is overwritten.
+/// * `array` - Array to be saved.
 pub fn save_array<
     T: Clone + npyz::AutoSerialize,
     S: ndarray::Data<Elem = T>,
@@ -55,6 +63,7 @@ pub fn save_array<
     write_array(BufWriter::new(File::create(path).unwrap()), array)
 }
 
+/// Creates a [`ProgressBar`] with a predefined default style.
 pub fn progress_bar(len: usize) -> ProgressBar {
     let progress_bar = ProgressBar::new(len as u64).with_style(
         ProgressStyle::with_template("{elapsed_precise} {wide_bar} {pos}/{len} ({eta})").unwrap(),

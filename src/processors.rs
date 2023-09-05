@@ -1,8 +1,9 @@
-use std::ops::Add;
+//! Traces processing algorithms, such as T-Test, SNR, etc.
 
+use std::ops::Add;
 use ndarray::{s, Array1, Array2, ArrayView1};
 
-/// Processes traces to calculate mean and variance
+/// Processes traces to calculate mean and variance.
 #[derive(Clone)]
 pub struct MeanVar {
     /// Sum of traces
@@ -14,7 +15,7 @@ pub struct MeanVar {
 }
 
 impl MeanVar {
-    /// Creates a new mean and variance processor
+    /// Creates a new mean and variance processor.
     ///
     /// # Arguments
     ///
@@ -27,7 +28,7 @@ impl MeanVar {
         }
     }
 
-    /// Processes an input trace to update internal accumulators
+    /// Processes an input trace to update internal accumulators.
     pub fn process<T: Into<i64> + Copy>(&mut self, trace: &ArrayView1<T>) {
         let size = self.acc_1.len();
         for i in 0..size {
@@ -38,12 +39,12 @@ impl MeanVar {
         self.count += 1
     }
 
-    /// Returns trace mean
+    /// Returns trace mean.
     pub fn mean(&self) -> Array1<f64> {
         self.acc_1.map(|&x| x as f64 / self.count as f64)
     }
 
-    /// Calculates and returns traces variance
+    /// Calculates and returns traces variance.
     pub fn var(&self) -> Array1<f64> {
         self.acc_1
             .iter()
@@ -57,7 +58,7 @@ impl MeanVar {
             .collect()
     }
 
-    /// Number of traces processed
+    /// Returns the number of traces processed.
     pub fn count(&self) -> usize {
         self.count
     }
@@ -75,7 +76,7 @@ impl Add for MeanVar {
     }
 }
 
-/// Processes traces to calculate the Signal-to-Noise Ratio
+/// Processes traces to calculate the Signal-to-Noise Ratio.
 #[derive(Clone)]
 pub struct Snr {
     mean_var: MeanVar,
@@ -85,7 +86,7 @@ pub struct Snr {
 }
 
 impl Snr {
-    /// Creates a new SNR processor
+    /// Creates a new SNR processor.
     ///
     /// # Arguments
     ///
@@ -99,7 +100,7 @@ impl Snr {
         }
     }
 
-    /// Processes an input trace to update internal accumulators
+    /// Processes an input trace to update internal accumulators.
     pub fn process<T: Into<i64> + Copy>(&mut self, trace: &ArrayView1<T>, class: usize) {
         self.mean_var.process(trace);
         let size = self.part_acc_1.shape()[1];
@@ -110,7 +111,7 @@ impl Snr {
         }
     }
 
-    /// Returns SNR of the trace
+    /// Returns Signal-to-Noise Ratio of the traces.
     pub fn snr(&self) -> Array1<f64> {
         let size = self.part_acc_1.shape()[1];
         let classes = self.part_acc_1.shape()[0];
@@ -145,7 +146,7 @@ impl Add for Snr {
     }
 }
 
-/// Welch's T-Test
+/// Processes traces to calculate Welch's T-Test.
 pub struct TTest {
     mean_var_1: MeanVar,
     mean_var_2: MeanVar,
@@ -165,6 +166,11 @@ impl TTest {
     }
 
     /// Processes an input trace to update internal accumulators.
+    ///
+    /// # Arguments
+    ///
+    /// * `trace` - Input trace.
+    /// * `class` - Indicates to which of the two partitions the given trace belongs.
     pub fn process<T: Into<i64> + Copy>(&mut self, trace: &ArrayView1<T>, class: bool) {
         if class {
             self.mean_var_2.process(trace);
