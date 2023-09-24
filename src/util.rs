@@ -7,9 +7,9 @@ use std::{
 };
 
 use indicatif::{ProgressBar, ProgressStyle};
-use ndarray::{Array, Array1, ArrayView2, Array2};
+use ndarray::{Array, Array1, Array2, ArrayView2};
+use ndarray_npy::{ReadNpyExt, ReadableElement, WriteNpyExt};
 use npyz::{Deserialize, NpyFile, WriterBuilder};
-use ndarray_npy::{ReadableElement, WriteNpyExt, ReadNpyExt};
 
 /// Writes an ndarray in npy format.
 ///
@@ -64,8 +64,6 @@ pub fn save_array<
     write_array(BufWriter::new(File::create(path).unwrap()), array)
 }
 
-
-
 /// Creates a [`ProgressBar`] with a predefined default style.
 pub fn progress_bar(len: usize) -> ProgressBar {
     let progress_bar = ProgressBar::new(len as u64).with_style(
@@ -75,15 +73,13 @@ pub fn progress_bar(len: usize) -> ProgressBar {
     progress_bar
 }
 
-
-pub fn read_array_2_from_npy_file<T: ReadableElement> (dir: &str)-> Array2<T>{
+pub fn read_array_2_from_npy_file<T: ReadableElement>(dir: &str) -> Array2<T> {
     let reader: File = File::open(dir).unwrap();
     let arr: Array2<T> = Array2::<T>::read_npy(reader).unwrap();
     arr
-}           
+}
 
-
-pub fn save_array2(path: &str, ar: ArrayView2<f32>){
+pub fn save_array2(path: &str, ar: ArrayView2<f32>) {
     let writer = BufWriter::new(File::create(path).unwrap());
     let _ = ar.write_npy(writer);
 }

@@ -1,7 +1,7 @@
 //! Traces processing algorithms, such as T-Test, SNR, etc.
 
-use std::ops::Add;
 use ndarray::{s, Array1, Array2, ArrayView1};
+use std::ops::Add;
 
 /// Processes traces to calculate mean and variance.
 #[derive(Clone)]
