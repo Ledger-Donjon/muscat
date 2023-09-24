@@ -4,7 +4,7 @@ use std::time::Instant;
 use ndarray::*;
 use muscat::cpa::*;
 use muscat::leakage::{hw, sbox};
-use muscat::util::{read_array_2_from_npy_file, write_npy};
+use muscat::util::{read_array_2_from_npy_file, save_array2, progress_bar};
 
 
 // traces format
@@ -21,16 +21,17 @@ fn rank(){
     let size: usize = 5000; // Number of samples 
     let guess_range = 256; // 2**(key length)
     let target_byte = 1;
-    let folder = String::from("data");  
+    let folder = String::from("../../data");  
     let nfiles = 5;   
-    let mut bar = ProgressBar::default(nfiles as u32, 50, false);
+    // let mut bar = ProgressBar::default(nfiles as u32, 50, false);
+    let bar = progress_bar(nfiles);
     let chunk = 3000;
-    let mut rank: Cpa = Cpa::new(size, guess_range, target_byte, leakage_model);
+    let mut rank = Cpa::new(size, guess_range, target_byte, leakage_model);
     for file in 0..nfiles{
-        let dir_l = format!("{}{}{}{}", folder, "/l", file.to_string(), ".npy" ); // leakage directory
-        let dir_p = format!("{}{}{}{}", folder, "/p", file.to_string(), ".npy"); // plaintext directory
-        let leakages: Array2<FormatTraces> = read_array_2_from_npy_file::<FormatTraces>(&dir_l);
-        let plaintext: Array2<FormatMetadata> = read_array_2_from_npy_file::<FormatMetadata>(&dir_p);
+        let dir_l = format!("{folder}/l{file}.npy");
+        let dir_p = format!("{folder}/p{file}.npy");
+        let leakages: Array2<FormatTraces> = read_array_2_from_npy_file(&dir_l);
+        let plaintext: Array2<FormatMetadata> = read_array_2_from_npy_file(&dir_p);
         let len_file = leakages.shape()[0];
         for sample in (0..len_file).step_by(chunk){
             let l_sample: ndarray::ArrayBase<ndarray::ViewRepr<&FormatTraces>, ndarray::Dim<[usize; 2]>> = leakages.slice(s![sample..sample+chunk, ..]);
@@ -45,10 +46,10 @@ fn rank(){
             rank.finalize();
         
         }
-        bar.update(); 
+        bar.inc(file as u64);
     }
     // save rank key curves in npy
-    write_npy("examples/results/rank.npy", rank.pass_rank());
+    save_array2("examples/results/rank.npy", rank.pass_rank());
 }
     
     

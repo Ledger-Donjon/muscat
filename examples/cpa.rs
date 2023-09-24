@@ -1,10 +1,13 @@
-use simple_bar::ProgressBar;
+// use simple_bar::ProgressBar;
 use rayon::prelude::{ParallelIterator, ParallelBridge};
 use std::time::Instant;
 use ndarray::*;
 use muscat::cpa::*;
 use muscat::leakage::{hw, sbox};
-use muscat::util::{read_array_2_from_npy_file, write_npy};
+use muscat::util::{read_array_2_from_npy_file, save_array2, progress_bar};
+use indicatif::ProgressIterator;
+
+
 
 
 // traces format
@@ -23,18 +26,16 @@ fn cpa()
     let size: usize = 5000;  // Number of samples 
     let guess_range = 256;  // 2**(key length)
     let target_byte = 1;    
-    let folder = String::from("data"); // Directory of leakages and metadata
+    let folder = String::from("../../data"); // Directory of leakages and metadata
     let nfiles = 5; // Number of files in the directory. TBD: Automating this value
-    let mut bar = ProgressBar::default(nfiles as u32, 50, false);
     
     /* Parallel operation using multi-threading on patches */
-    let mut cpa: Cpa = (0..nfiles).into_iter().
+    let mut cpa = (0..nfiles).into_iter().progress_with(progress_bar(nfiles)).
     map(|n| {
-        bar.update();
-        let dir_l: String = format!("{}{}{}{}", folder, "/l", n.to_string(), ".npy" );
-        let dir_p = format!("{}{}{}{}", folder, "/p", n.to_string(), ".npy");
-        let leakages: Array2<FormatTraces>= read_array_2_from_npy_file::<FormatTraces>(&dir_l);
-        let plaintext: Array2<FormatMetadata> = read_array_2_from_npy_file::<FormatMetadata>(&dir_p);
+        let dir_l = format!("{folder}/l{n}.npy");
+        let dir_p = format!("{folder}/p{n}.npy");
+        let leakages: Array2<FormatTraces>= read_array_2_from_npy_file(&dir_l);
+        let plaintext: Array2<FormatMetadata> = read_array_2_from_npy_file(&dir_p);
         (leakages, plaintext)
         
     }).into_iter().par_bridge().map(|patch|
@@ -52,14 +53,12 @@ fn cpa()
     cpa.finalize();
     println!("Guessed key = {}", cpa.pass_guess());
     // save corr key curves in npy
-    write_npy("examples/results/corr.npy", cpa.pass_corr_array().view());
+    save_array2("examples/results/corr.npy", cpa.pass_corr_array().view());
     
 }
 
 
 
-
-    
 fn main(){
     cpa();
 }

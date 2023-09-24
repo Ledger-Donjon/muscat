@@ -64,6 +64,8 @@ pub fn save_array<
     write_array(BufWriter::new(File::create(path).unwrap()), array)
 }
 
+
+
 /// Creates a [`ProgressBar`] with a predefined default style.
 pub fn progress_bar(len: usize) -> ProgressBar {
     let progress_bar = ProgressBar::new(len as u64).with_style(
@@ -81,7 +83,7 @@ pub fn read_array_2_from_npy_file<T: ReadableElement> (dir: &str)-> Array2<T>{
 }           
 
 
-pub fn write_npy(dir: &str, ar: ArrayView2<f32>){
-    let writer = BufWriter::new(File::create(dir).unwrap());
+pub fn save_array2(path: &str, ar: ArrayView2<f32>){
+    let writer = BufWriter::new(File::create(path).unwrap());
     let _ = ar.write_npy(writer);
 }
