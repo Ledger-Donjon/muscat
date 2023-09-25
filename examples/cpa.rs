@@ -55,7 +55,7 @@ fn cpa() {
     cpa.finalize();
     println!("Guessed key = {}", cpa.pass_guess());
     // save corr key curves in npy
-    save_array("../results/corr.npy", &cpa.pass_corr_array()).unwrap();
+    save_array("../results/corr.npy", &cpa.pass_corr_array());
 }
 
 fn main() {

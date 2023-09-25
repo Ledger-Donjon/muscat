@@ -8,32 +8,9 @@ use std::{
 
 use indicatif::{ProgressBar, ProgressStyle};
 use ndarray::{Array, Array1, Array2, ArrayView2};
-use ndarray_npy::{ReadNpyExt, ReadableElement, WriteNpyExt};
+use ndarray_npy::{ReadNpyExt, ReadableElement, WriteNpyExt, write_npy};
 use npyz::{Deserialize, NpyFile, WriterBuilder};
 
-/// Writes an ndarray in npy format.
-///
-/// This code comes from the npyz crate documentation:
-/// https://docs.rs/npyz/latest/npyz/#working-with-ndarray
-pub fn write_array<T, S, D>(
-    writer: impl io::Write,
-    array: &ndarray::ArrayBase<S, D>,
-) -> io::Result<()>
-where
-    T: Clone + npyz::AutoSerialize,
-    S: ndarray::Data<Elem = T>,
-    D: ndarray::Dimension,
-{
-    let shape: Vec<u64> = array.shape().iter().map(|&x| x as u64).collect();
-    let c_order_items = array.iter();
-    let mut writer = npyz::WriteOptions::new()
-        .default_dtype()
-        .shape(&shape)
-        .writer(writer)
-        .begin_nd()?;
-    writer.extend(c_order_items)?;
-    writer.finish()
-}
 
 /// Reads a [`NpyFile`] as a [`Array1`]
 ///
@@ -54,15 +31,17 @@ pub fn read_array_1_from_npy_file<T: Deserialize, R: std::io::Read>(npy: NpyFile
 /// * `path` - Output file path. If a file already exists, it is overwritten.
 /// * `array` - Array to be saved.
 pub fn save_array<
-    T: Clone + npyz::AutoSerialize,
+    T: ndarray_npy::WritableElement,
     S: ndarray::Data<Elem = T>,
     D: ndarray::Dimension,
 >(
     path: &str,
     array: &ndarray::ArrayBase<S, D>,
-) -> io::Result<()> {
-    write_array(BufWriter::new(File::create(path).unwrap()), array)
+) {
+    // let dir = BufWriter::new(File::create(path).unwrap());
+    write_npy(path, array).unwrap();
 }
+
 
 /// Creates a [`ProgressBar`] with a predefined default style.
 pub fn progress_bar(len: usize) -> ProgressBar {

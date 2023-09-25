@@ -60,7 +60,7 @@ fn rank() {
         bar.inc(file as u64);
     }
     // save rank key curves in npy
-    save_array("../results/rank.npy", &rank.pass_rank()).unwrap();
+    save_array("../results/rank.npy", &rank.pass_rank());
 }
 
 fn main() {
