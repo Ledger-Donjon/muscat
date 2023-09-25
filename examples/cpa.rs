@@ -2,7 +2,7 @@
 use indicatif::ProgressIterator;
 use muscat::cpa::*;
 use muscat::leakage::{hw, sbox};
-use muscat::util::{progress_bar, read_array_2_from_npy_file, save_array2};
+use muscat::util::{progress_bar, read_array_2_from_npy_file, save_array};
 use ndarray::*;
 use rayon::prelude::{ParallelBridge, ParallelIterator};
 use std::time::Instant;
@@ -55,7 +55,7 @@ fn cpa() {
     cpa.finalize();
     println!("Guessed key = {}", cpa.pass_guess());
     // save corr key curves in npy
-    save_array2("examples/results/corr.npy", cpa.pass_corr_array().view());
+    save_array("../results/corr.npy", &cpa.pass_corr_array()).unwrap();
 }
 
 fn main() {

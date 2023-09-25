@@ -1,6 +1,6 @@
 use muscat::cpa::*;
 use muscat::leakage::{hw, sbox};
-use muscat::util::{progress_bar, read_array_2_from_npy_file, save_array2};
+use muscat::util::{progress_bar, read_array_2_from_npy_file, save_array};
 use ndarray::*;
 use rayon::prelude::{ParallelBridge, ParallelIterator};
 use simple_bar::ProgressBar;
@@ -60,7 +60,7 @@ fn rank() {
         bar.inc(file as u64);
     }
     // save rank key curves in npy
-    save_array2("examples/results/rank.npy", rank.pass_rank());
+    save_array("../results/rank.npy", &rank.pass_rank()).unwrap();
 }
 
 fn main() {
