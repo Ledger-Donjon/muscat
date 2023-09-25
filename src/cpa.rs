@@ -123,8 +123,15 @@ impl Cpa {
         // let mut max_256: Array2<f32> = Array2::zeros((self._guess_range as usize, 1));
         for i in 0..self.guess_range {
             let row = self.corr.row(i as usize);
-            self.max_corr[[i as usize, 0]] =
-                *row.iter().max_by(|x, y| x.partial_cmp(y).unwrap()).unwrap();
+            // Calculating the max value in the row
+            let max_value = row.into_iter().reduce(|a, b| {
+                let mut tmp = a;
+                if tmp < b {
+                    tmp = b;
+                }
+                tmp
+            }).unwrap();
+            self.max_corr[[i as usize, 0]] = *max_value;
         }
         self.rank_slice = concatenate![Axis(1), self.rank_slice, self.max_corr];
     }
