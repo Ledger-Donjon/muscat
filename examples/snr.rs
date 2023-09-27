@@ -37,5 +37,5 @@ fn main() {
         .reduce(|| Snr::new(leakage_size, 256), |a, b| a + b);
 
     // Save the resulting SNR trace to a numpy file
-    save_array("result.npy", &result.snr()).unwrap();
+    save_array("result.npy", &result.snr());
 }
