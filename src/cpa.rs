@@ -124,13 +124,16 @@ impl Cpa {
         for i in 0..self.guess_range {
             let row = self.corr.row(i as usize);
             // Calculating the max value in the row
-            let max_value = row.into_iter().reduce(|a, b| {
-                let mut tmp = a;
-                if tmp < b {
-                    tmp = b;
-                }
-                tmp
-            }).unwrap();
+            let max_value = row
+                .into_iter()
+                .reduce(|a, b| {
+                    let mut tmp = a;
+                    if tmp < b {
+                        tmp = b;
+                    }
+                    tmp
+                })
+                .unwrap();
             self.max_corr[[i as usize, 0]] = *max_value;
         }
         self.rank_slice = concatenate![Axis(1), self.rank_slice, self.max_corr];

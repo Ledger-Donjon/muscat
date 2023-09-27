@@ -8,9 +8,8 @@ use std::{
 
 use indicatif::{ProgressBar, ProgressStyle};
 use ndarray::{Array, Array1, Array2, ArrayView2};
-use ndarray_npy::{ReadNpyExt, ReadableElement, WriteNpyExt, write_npy};
+use ndarray_npy::{write_npy, ReadNpyExt, ReadableElement, WriteNpyExt};
 use npyz::{Deserialize, NpyFile, WriterBuilder};
-
 
 /// Reads a [`NpyFile`] as a [`Array1`]
 ///
@@ -41,7 +40,6 @@ pub fn save_array<
     // let dir = BufWriter::new(File::create(path).unwrap());
     write_npy(path, array).unwrap();
 }
-
 
 /// Creates a [`ProgressBar`] with a predefined default style.
 pub fn progress_bar(len: usize) -> ProgressBar {
