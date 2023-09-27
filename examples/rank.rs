@@ -11,8 +11,8 @@ type FormatTraces = i16;
 type FormatMetadata = i32;
 
 // leakage model
-pub fn leakage_model(value: usize, guess: usize) -> usize {
-    hw(sbox[(value ^ guess) as usize] as usize)
+pub fn leakage_model(value: usize, guess: usize) -> usize{
+    hw(sbox((value ^ guess) as u8) as usize)
 }
 
 fn rank() {
