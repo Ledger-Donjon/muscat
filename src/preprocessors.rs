@@ -1,9 +1,11 @@
-use ndarray::{Array1, ArrayView1};
+use ndarray::{Array1, ArrayView1, s};
 use std::ops::Range;
 use itertools::Itertools;
 
-// Computes the centered product of "order" leakage samples
-// Used particularly when performing high-order SCA
+use crate::processors::MeanVar;
+
+/// Computes the centered product of "order" leakage samples
+/// Used particularly when performing high-order SCA
 struct CenteredProduct{
     /// Sum of traces
     acc: Array1<i64>,
@@ -62,7 +64,7 @@ impl CenteredProduct{
         let mut centered_product_trace = Array1::ones(length_out_trace);
         
         // Then we do the products
-        let mut multi_prod = (0..self.intervals.len()).map(|i| self.intervals[i].clone()).multi_cartesian_product(); //NOTE/TODO: maybe this can go in the struct parameters, which could improve parameters        
+        let mut multi_prod = (0..self.intervals.len()).map(|i| self.intervals[i].clone()).multi_cartesian_product(); //NOTE/TODO: maybe this can go in the struct parameters, which could improve performances        
     
         for (idx,combination) in multi_prod.enumerate(){
             println!("{:?}",combination);
@@ -75,9 +77,84 @@ impl CenteredProduct{
     }
 }
 
+/// Elevates parts of a trace to a certain power
+struct Power{
+    intervals: Vec<Range<i32>>,
+    power: i32,
+}
+
+impl Power{
+    /// Creates a new Power processor.
+    ///
+    /// # Arguments
+    ///
+    /// * `size` - Number of samples per trace
+    /// * `intervals` - Intervals to elevate to the power
+    /// * `power` - Power to elevate
+    pub fn new(size: usize, intervals: Vec<Range<i32>>, power: i32) -> Self {
+        Self {
+            intervals: intervals,
+            power : power
+        }
+    }
+
+    /// Processes an input trace
+    pub fn process<T: Into<i64> + Copy>(&self, trace: &ArrayView1<T>) -> Array1<f64> {
+        // Concatenate the slices specified by the ranges
+        let result: Array1<_> = self.intervals
+            .iter()
+            .flat_map(|range| trace.slice(s![range.clone()]).to_owned())
+            .map(|val| val.into() as f64)
+            .collect();
+
+        result.mapv(|result| result.powi(self.power))
+    }
+}
+
+
+/// Standardization of the traces by removing the mean and scaling to unit variance
+struct StandardScaler{
+    /// meanVar processor
+    meanvar: MeanVar,
+    /// mean
+    mean: Array1<f64>,
+    /// std
+    std: Array1<f64>,
+}
+
+impl StandardScaler{
+    pub fn new(size: usize) -> Self {
+        Self {
+            meanvar: MeanVar::new(size),
+            mean: Array1::zeros(size),
+            std: Array1::zeros(size),
+        }
+    }
+
+    /// Processes an input trace to update internal accumulators.
+    pub fn process<T: Into<i64> + Copy>(&mut self, trace: &ArrayView1<T>) {
+        self.meanvar.process(trace);
+    }
+
+    /// Compute mean and var
+    pub fn finalize(&mut self){
+        self.mean = self.meanvar.mean();
+        self.std = self.meanvar.var().mapv(f64::sqrt);
+    }
+
+    /// Apply the processing to an input trace 
+    pub fn apply<T: Into<f64> + Copy>(&mut self, trace: &ArrayView1<T>) -> Array1<f64>{
+        (trace.mapv(|x| f64::from(x.into())) - &self.mean) / &self.std
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
+    use crate::preprocessors::StandardScaler;
+
     use super::CenteredProduct;
+    use super::Power;
     use ndarray::array;
 
     fn round_to_2_digits(x:f64)->f64{
@@ -132,6 +209,86 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn test_power() {
+        let t= array![-1, 2, -3, 4, -5, 6];
+        let processor1 = Power {
+            intervals: vec![0..2, 4..6],
+            power:1,
+        };
+        let processor2 = Power {
+            intervals: vec![0..2, 4..6],
+            power:2,
+        };
+        let processor3 = Power {
+            intervals: vec![0..2, 4..6],
+            power:3,
+        };
+        let expected_results =[
+            array![-1.0, 2.0, -5.0, 6.0],
+            array![1.0, 4.0, 25.0, 36.0],
+            array![-1.0, 8.0, -125.0, 216.0],
+        ];
+
+        assert_eq!(
+            processor1.process(&t.view()).map(|x| round_to_2_digits(*x)),
+            expected_results[0]
+        );
+        assert_eq!(
+            processor2.process(&t.view()).map(|x| round_to_2_digits(*x)),
+            expected_results[1]
+        );
+        assert_eq!(
+            processor3.process(&t.view()).map(|x| round_to_2_digits(*x)),
+            expected_results[2]
+        );
+        
+
+    }
+
+    #[test]
+    fn test_standard_scaler() {
+        let traces = [
+            array![77, 137, 51, 91],
+            array![72, 61, 91, 83],
+            array![39, 49, 52, 23],
+            array![26, 114, 63, 45],
+            array![30, 8, 97, 91],
+            array![13, 68, 7, 45],
+            array![17, 181, 60, 34],
+            array![43, 88, 76, 78],
+            array![0, 36, 35, 0],
+            array![93, 191, 49, 26],
+        ];
+
+        let mut processor = StandardScaler::new(4);
+        for t in traces.iter(){
+            processor.process(&t.view());
+        }
+        processor.finalize();
+
+        let expected_results =[
+            array![ 1.25,  0.75, -0.28,  1.29],
+            array![ 1.07, -0.56,  1.32,  1.03],
+            array![-0.07, -0.76, -0.24, -0.94], 
+            array![-0.52,  0.36,  0.20, -0.22], 
+            array![-0.38, -1.47,  1.55,  1.29], 
+            array![-0.97, -0.44, -2.04, -0.22], 
+            array![-0.83,  1.51,  0.08, -0.58], 
+            array![ 0.07, -0.09,  0.72,  0.86], 
+            array![-1.42, -0.99, -0.92, -1.69], 
+            array![ 1.80,  1.68, -0.36, -0.84],
+        ];
+
+        for (i,t) in traces.iter().enumerate(){
+            assert_eq!(
+                processor.apply(&t.view()).map(|x| round_to_2_digits(*x)),
+                expected_results[i]
+            );
+        }
+    }
+
 
 }
 
