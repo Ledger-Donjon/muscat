@@ -1,5 +1,4 @@
 //! Traces processing algorithms, such as T-Test, SNR, etc.
-
 use ndarray::{s, Array1, Array2, ArrayView1};
 use std::ops::Add;
 
@@ -201,6 +200,7 @@ impl Add for TTest {
         }
     }
 }
+
 
 #[cfg(test)]
 mod tests {

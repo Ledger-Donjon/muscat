@@ -3,8 +3,8 @@ use muscat::leakage::{hw, sbox};
 use muscat::util::{progress_bar, read_array_2_from_npy_file, save_array};
 use ndarray::*;
 use rayon::prelude::{ParallelBridge, ParallelIterator};
-use simple_bar::ProgressBar;
 use std::time::Instant;
+use indicatif::ProgressIterator;
 
 // traces format
 type FormatTraces = i16;
@@ -21,11 +21,9 @@ fn rank() {
     let target_byte = 1;
     let folder = String::from("../../data");
     let nfiles = 5;
-    // let mut bar = ProgressBar::default(nfiles as u32, 50, false);
-    let bar = progress_bar(nfiles);
     let chunk = 3000;
     let mut rank = Cpa::new(size, guess_range, target_byte, leakage_model);
-    for file in 0..nfiles {
+    for file in (0..nfiles).progress_with(progress_bar(nfiles)) {
         let dir_l = format!("{folder}/l{file}.npy");
         let dir_p = format!("{folder}/p{file}.npy");
         let leakages: Array2<FormatTraces> = read_array_2_from_npy_file(&dir_l);
@@ -57,7 +55,6 @@ fn rank() {
             rank = rank + x;
             rank.finalize();
         }
-        bar.inc(file as u64);
     }
     // save rank key curves in npy
     save_array("../results/rank.npy", &rank.pass_rank());
