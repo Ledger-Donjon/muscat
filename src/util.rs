@@ -58,5 +58,11 @@ pub fn read_array_2_from_npy_file<T: ReadableElement>(dir: &str) -> Array2<T> {
 
 pub fn save_array2(path: &str, ar: ArrayView2<f32>) {
     let writer = BufWriter::new(File::create(path).unwrap());
-    let _ = ar.write_npy(writer);
+    ar.write_npy(writer).unwrap();
 }
+
+
+
+
+
+

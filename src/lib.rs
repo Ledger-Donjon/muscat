@@ -5,4 +5,4 @@ pub mod quicklog;
 pub mod trace;
 pub mod util;
 pub mod preprocessors;
-use cpa_normal;
+pub mod cpa_normal;

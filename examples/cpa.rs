@@ -1,6 +1,6 @@
-use cpa::cpa_normal::*;
-use cpa::leakage::{hw, sbox};
-use cpa::tools::{progress_bar, read_array_2_from_npy_file, write_array};
+use muscat::cpa_normal::*;
+use muscat::leakage::{hw, sbox};
+use muscat::util::{progress_bar, read_array_2_from_npy_file, save_array2};
 use indicatif::ProgressIterator;
 use ndarray::*;
 use rayon::iter::{ParallelBridge, ParallelIterator};
@@ -24,7 +24,7 @@ fn cpa() {
     let size: usize = end_sample - start_sample; // Number of samples
     let patch: usize = 500;
     let guess_range = 256; // 2**(key length)
-    let folder = String::from("../data/cw");
+    let folder = String::from("../../data/cw");
     let dir_l = format!("{folder}/leakages.npy");
     let dir_p = format!("{folder}/plaintexts.npy");
     let leakages: Array2<FormatTraces> = read_array_2_from_npy_file::<FormatTraces>(&dir_l);
@@ -51,9 +51,8 @@ fn cpa() {
         );
     cpa_parallel.finalize();
     println!("Guessed key = {}", cpa_parallel.pass_guess());
-    write_array("results/corr.npy", cpa_parallel.pass_corr_array().view())
+    save_array2("results/corr.npy", cpa_parallel.pass_corr_array().view());
 }
-
 
 
 #[allow(dead_code)]
@@ -89,7 +88,7 @@ fn success() {
     cpa.finalize();
     println!("Guessed key = {}", cpa.pass_guess());
     // save corr key curves in npy
-    write_array("results/success.npy", cpa.pass_rank().view());
+    save_array2("results/success.npy", cpa.pass_rank().view());
 }
 
 
