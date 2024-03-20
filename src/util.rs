@@ -60,9 +60,3 @@ pub fn save_array2(path: &str, ar: ArrayView2<f32>) {
     let writer = BufWriter::new(File::create(path).unwrap());
     ar.write_npy(writer).unwrap();
 }
-
-
-
-
-
-

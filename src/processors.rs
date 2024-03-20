@@ -201,7 +201,6 @@ impl Add for TTest {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::MeanVar;

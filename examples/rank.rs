@@ -1,10 +1,10 @@
+use indicatif::ProgressIterator;
 use muscat::cpa::*;
 use muscat::leakage::{hw, sbox};
 use muscat::util::{progress_bar, read_array_2_from_npy_file, save_array};
 use ndarray::*;
 use rayon::prelude::{ParallelBridge, ParallelIterator};
 use std::time::Instant;
-use indicatif::ProgressIterator;
 
 // traces format
 type FormatTraces = i16;
