@@ -5,12 +5,13 @@ use ndarray::Array2;
 use ndarray_rand::rand::{rngs::StdRng, SeedableRng};
 use ndarray_rand::rand_distr::Uniform;
 use ndarray_rand::RandomExt;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 pub fn leakage_model(value: usize, guess: usize) -> usize {
     hw(sbox((value ^ guess) as u8) as usize)
 }
 
-fn compute_cpa(leakages: &Array2<f64>, plaintexts: &Array2<u8>) -> Cpa {
+fn cpa_sequential(leakages: &Array2<f64>, plaintexts: &Array2<u8>) -> Cpa {
     let mut cpa = Cpa::new(leakages.shape()[1], 256, 0, leakage_model);
 
     for i in 0..leakages.shape()[0] {
@@ -19,6 +20,33 @@ fn compute_cpa(leakages: &Array2<f64>, plaintexts: &Array2<u8>) -> Cpa {
             plaintexts.row(i).map(|y| *y as usize),
         );
     }
+
+    cpa.finalize();
+
+    cpa
+}
+
+fn cpa_parallel(leakages: &Array2<f64>, plaintexts: &Array2<u8>) -> Cpa {
+    let mut cpa = (0..8)
+        .into_par_iter()
+        .map(|chunk_num| {
+            let mut cpa = Cpa::new(leakages.shape()[1], 256, 0, leakage_model);
+
+            for i in
+                (chunk_num * leakages.shape()[0] / 8)..((chunk_num + 1) * leakages.shape()[0] / 8)
+            {
+                cpa.update(
+                    leakages.row(i).map(|x| *x as usize),
+                    plaintexts.row(i).map(|y| *y as usize),
+                );
+            }
+
+            cpa
+        })
+        .reduce(
+            || Cpa::new(leakages.shape()[1], 256, 0, leakage_model),
+            |a: Cpa, b| a + b,
+        );
 
     cpa.finalize();
 
@@ -42,9 +70,14 @@ fn bench_cpa(c: &mut Criterion) {
         );
 
         group.bench_with_input(
-            BenchmarkId::from_parameter(nb_traces),
+            BenchmarkId::new("sequential", nb_traces),
             &(&leakages, &plaintexts),
-            |b, (leakages, plaintexts)| b.iter(|| compute_cpa(leakages, plaintexts)),
+            |b, (leakages, plaintexts)| b.iter(|| cpa_sequential(leakages, plaintexts)),
+        );
+        group.bench_with_input(
+            BenchmarkId::new("parallel", nb_traces),
+            &(&leakages, &plaintexts),
+            |b, (leakages, plaintexts)| b.iter(|| cpa_parallel(leakages, plaintexts)),
         );
     }
 
