@@ -1,16 +1,13 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use muscat::leakage::{hw, sbox};
 use muscat::processors::Snr;
-use ndarray::Array2;
+use ndarray::{Array2, Axis};
 use ndarray_rand::rand::{rngs::StdRng, SeedableRng};
 use ndarray_rand::rand_distr::Uniform;
 use ndarray_rand::RandomExt;
+use rayon::iter::{ParallelBridge, ParallelIterator};
+use std::iter::zip;
 
-pub fn leakage_model(value: usize, guess: usize) -> usize {
-    hw(sbox((value ^ guess) as u8) as usize)
-}
-
-fn compute_snr(leakages: &Array2<i64>, plaintexts: &Array2<u8>) -> Snr {
+fn snr_sequential(leakages: &Array2<i64>, plaintexts: &Array2<u8>) -> Snr {
     let mut snr = Snr::new(leakages.shape()[1], 256);
 
     for i in 0..leakages.shape()[0] {
@@ -18,6 +15,26 @@ fn compute_snr(leakages: &Array2<i64>, plaintexts: &Array2<u8>) -> Snr {
     }
 
     snr
+}
+
+fn snr_parallel(leakages: &Array2<i64>, plaintexts: &Array2<u8>) -> Snr {
+    let chunk_size = 500;
+
+    zip(
+        leakages.axis_chunks_iter(Axis(0), chunk_size),
+        plaintexts.axis_chunks_iter(Axis(0), chunk_size),
+    )
+    .par_bridge()
+    .map(|(leakages_chunk, plaintexts_chunk)| {
+        let mut snr = Snr::new(leakages.shape()[1], 256);
+
+        for i in 0..leakages_chunk.shape()[0] {
+            snr.process(&leakages_chunk.row(i), plaintexts_chunk.row(i)[0] as usize);
+        }
+
+        snr
+    })
+    .reduce(|| Snr::new(leakages.shape()[1], 256), |a, b| a + b)
 }
 
 fn bench_snr(c: &mut Criterion) {
@@ -34,9 +51,15 @@ fn bench_snr(c: &mut Criterion) {
             Array2::random_using((nb_traces, 16), Uniform::new_inclusive(0, 255), &mut rng);
 
         group.bench_with_input(
-            BenchmarkId::from_parameter(nb_traces),
+            BenchmarkId::new("sequential", nb_traces),
             &(&leakages, &plaintexts),
-            |b, (leakages, plaintexts)| b.iter(|| compute_snr(leakages, plaintexts)),
+            |b, (leakages, plaintexts)| b.iter(|| snr_sequential(leakages, plaintexts)),
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("parallel", nb_traces),
+            &(&leakages, &plaintexts),
+            |b, (leakages, plaintexts)| b.iter(|| snr_parallel(leakages, plaintexts)),
         );
     }
 
