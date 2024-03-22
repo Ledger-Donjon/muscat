@@ -48,12 +48,10 @@ impl Cpa {
         }
     }
 
-    pub fn update<T: Copy,  U: Copy>(
-        &mut self,
-        trace_patch: Array2<T>,
-        plaintext_patch: Array2<U>,
-    ) where
-        f32: From<T>, usize:From<U>
+    pub fn update<T: Copy, U: Copy>(&mut self, trace_patch: Array2<T>, plaintext_patch: Array2<U>)
+    where
+        f32: From<T>,
+        usize: From<U>,
     {
         /* This function updates the internal arrays of the CPA
         It accepts trace_patch and plaintext_patch to update them*/
@@ -98,7 +96,14 @@ impl Cpa {
         }
     }
 
-    pub fn update_success<T: Copy, U: Copy>(&mut self, trace_patch: Array2<T>, plaintext_patch: Array2<U>) where f32: From<T>, usize:From<U> {
+    pub fn update_success<T: Copy, U: Copy>(
+        &mut self,
+        trace_patch: Array2<T>,
+        plaintext_patch: Array2<U>,
+    ) where
+        f32: From<T>,
+        usize: From<U>,
+    {
         /* This function updates the main arrays of the CPA for the success rate*/
         self.update(trace_patch, plaintext_patch);
         if self.len_leakages % self.rank_traces == 0 {
@@ -115,24 +120,21 @@ impl Cpa {
         /* This function finalizes the calculation after
         feeding all stored acc arrays */
         let cov_n: Array2<f32> = self.cov.clone() / self.len_leakages as f32;
-        let avg_keys: Array1<f32> = self.sum_keys.clone()/ self.len_leakages as f32;
+        let avg_keys: Array1<f32> = self.sum_keys.clone() / self.len_leakages as f32;
         let std_key: Array1<f32> = self.sum2_keys.clone() / self.len_leakages as f32;
         let avg_leakages: Array1<f32> = self.sum_leakages.clone() / self.len_leakages as f32;
         let std_leakages: Array1<f32> = self.sum2_leakages.clone() / self.len_leakages as f32;
 
         for i in 0..self.guess_range as usize {
             for x in 0..self.len_samples {
-                let numerator: f32 = cov_n[[i, x]]
-                    - (avg_keys[i] * avg_leakages[x]);
+                let numerator: f32 = cov_n[[i, x]] - (avg_keys[i] * avg_leakages[x]);
 
-                let denominator_1: f32 = std_key[i]
-                    - (avg_keys[i] * avg_keys[i] );
+                let denominator_1: f32 = std_key[i] - (avg_keys[i] * avg_keys[i]);
 
-                let denominator_2: f32 = std_leakages[x]
-                    - (avg_leakages[x] * avg_leakages[x]);
-                if numerator != 0.0{
-                    self.corr[[i as usize, x]] = f32::abs(numerator / f32::sqrt(denominator_1 * denominator_2));
-
+                let denominator_2: f32 = std_leakages[x] - (avg_leakages[x] * avg_leakages[x]);
+                if numerator != 0.0 {
+                    self.corr[[i as usize, x]] =
+                        f32::abs(numerator / f32::sqrt(denominator_1 * denominator_2));
                 }
             }
         }

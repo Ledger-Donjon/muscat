@@ -350,7 +350,6 @@ where
             };
             loop {
                 if let Some(next) = self.records.next() {
-                    let next = next;
                     if next.bid().unwrap() != fid {
                         self.first = Some(next);
                         return Some(batch);

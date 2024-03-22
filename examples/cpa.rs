@@ -1,17 +1,15 @@
+use indicatif::ProgressIterator;
 use muscat::cpa_normal::*;
 use muscat::leakage::{hw, sbox};
 use muscat::util::{progress_bar, read_array_2_from_npy_file, save_array2};
-use indicatif::ProgressIterator;
 use ndarray::*;
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use std::time::{self};
-
 
 // leakage model
 pub fn leakage_model(value: ArrayView1<usize>, guess: usize) -> usize {
     hw(sbox((value[1] ^ guess) as u8) as usize)
 }
-
 
 // traces format
 type FormatTraces = f64;
@@ -30,7 +28,8 @@ fn cpa() {
     let leakages: Array2<FormatTraces> = read_array_2_from_npy_file::<FormatTraces>(&dir_l);
     let plaintext: Array2<FormatMetadata> = read_array_2_from_npy_file::<FormatMetadata>(&dir_p);
     let len_traces = leakages.shape()[0];
-    let mut cpa_parallel = ((0..len_traces).step_by(patch)).progress_with(progress_bar(len_traces))
+    let mut cpa_parallel = ((0..len_traces).step_by(patch))
+        .progress_with(progress_bar(len_traces))
         .map(|row| row)
         .par_bridge()
         .map(|row_number| {
@@ -53,7 +52,6 @@ fn cpa() {
     println!("Guessed key = {}", cpa_parallel.pass_guess());
     save_array2("results/corr.npy", cpa_parallel.pass_corr_array().view());
 }
-
 
 #[allow(dead_code)]
 fn success() {
@@ -79,9 +77,10 @@ fn success() {
             let range_rows: std::ops::Range<usize> = row..row + patch;
             let range_metadat = 0..plaintext.shape()[1];
             let sample_traces = leakages
-                .slice(s![range_rows.clone(), range_samples]).map(|l| *l as f32);
-            let sample_metadata: Array2<FormatMetadata>= plaintext
-                .slice(s![range_rows, range_metadat]).to_owned();
+                .slice(s![range_rows.clone(), range_samples])
+                .map(|l| *l as f32);
+            let sample_metadata: Array2<FormatMetadata> =
+                plaintext.slice(s![range_rows, range_metadat]).to_owned();
             cpa.update_success(sample_traces, sample_metadata);
         }
     }
@@ -91,14 +90,8 @@ fn success() {
     save_array2("results/success.npy", cpa.pass_rank().view());
 }
 
-
-
-fn main(){
+fn main() {
     let t = time::Instant::now();
     cpa();
     println!("{:?}", t.elapsed());
 }
-
-
-
-
