@@ -2,6 +2,14 @@
 
 An experimental side channel attacks library written in Rust.
 
+## Benchmark
+To reduce benchmark variance it is advised to follow [these instructions](https://google.github.io/benchmark/reducing_variance.html).
+
+Then to run benchmarks, run
+```sh
+cargo bench
+```
+
 ## License
 
 Licensed under either of
