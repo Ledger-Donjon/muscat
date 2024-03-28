@@ -1,11 +1,13 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use muscat::cpa::Cpa;
+use muscat::cpa_normal;
 use muscat::leakage::{hw, sbox};
-use ndarray::Array2;
+use ndarray::{Array2, ArrayView1, Axis};
 use ndarray_rand::rand::{rngs::StdRng, SeedableRng};
 use ndarray_rand::rand_distr::Uniform;
 use ndarray_rand::RandomExt;
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use rayon::iter::{ParallelBridge, ParallelIterator};
+use std::iter::zip;
 
 pub fn leakage_model(value: usize, guess: usize) -> usize {
     hw(sbox((value ^ guess) as u8) as usize)
@@ -16,8 +18,8 @@ fn cpa_sequential(leakages: &Array2<f64>, plaintexts: &Array2<u8>) -> Cpa {
 
     for i in 0..leakages.shape()[0] {
         cpa.update(
-            leakages.row(i).map(|x| *x as usize),
-            plaintexts.row(i).map(|y| *y as usize),
+            leakages.row(i).map(|&x| x as usize),
+            plaintexts.row(i).map(|&y| y as usize),
         );
     }
 
@@ -27,26 +29,80 @@ fn cpa_sequential(leakages: &Array2<f64>, plaintexts: &Array2<u8>) -> Cpa {
 }
 
 fn cpa_parallel(leakages: &Array2<f64>, plaintexts: &Array2<u8>) -> Cpa {
-    let mut cpa = (0..8)
-        .into_par_iter()
-        .map(|chunk_num| {
-            let mut cpa = Cpa::new(leakages.shape()[1], 256, 0, leakage_model);
+    let chunk_size = 500;
 
-            for i in
-                (chunk_num * leakages.shape()[0] / 8)..((chunk_num + 1) * leakages.shape()[0] / 8)
-            {
-                cpa.update(
-                    leakages.row(i).map(|x| *x as usize),
-                    plaintexts.row(i).map(|y| *y as usize),
-                );
-            }
+    let mut cpa = zip(
+        leakages.axis_chunks_iter(Axis(0), chunk_size),
+        plaintexts.axis_chunks_iter(Axis(0), chunk_size),
+    )
+    .par_bridge()
+    .map(|(leakages_chunk, plaintexts_chunk)| {
+        let mut cpa = Cpa::new(leakages.shape()[1], 256, 0, leakage_model);
 
-            cpa
-        })
-        .reduce(
-            || Cpa::new(leakages.shape()[1], 256, 0, leakage_model),
-            |a: Cpa, b| a + b,
+        for i in 0..leakages_chunk.shape()[0] {
+            cpa.update(
+                leakages_chunk.row(i).map(|&x| x as usize),
+                plaintexts_chunk.row(i).map(|&y| y as usize),
+            );
+        }
+
+        cpa
+    })
+    .reduce(
+        || Cpa::new(leakages.shape()[1], 256, 0, leakage_model),
+        |a: Cpa, b| a + b,
+    );
+
+    cpa.finalize();
+
+    cpa
+}
+
+pub fn leakage_model_normal(value: ArrayView1<usize>, guess: usize) -> usize {
+    hw(sbox((value[1] ^ guess) as u8) as usize)
+}
+
+fn cpa_normal_sequential(leakages: &Array2<f64>, plaintexts: &Array2<u8>) -> cpa_normal::Cpa {
+    let chunk_size = 500;
+
+    let mut cpa = cpa_normal::Cpa::new(leakages.shape()[1], chunk_size, 256, leakage_model_normal);
+
+    for (leakages_chunk, plaintexts_chunk) in zip(
+        leakages.axis_chunks_iter(Axis(0), chunk_size),
+        plaintexts.axis_chunks_iter(Axis(0), chunk_size),
+    ) {
+        cpa.update(
+            leakages_chunk.map(|&x| x as f32),
+            plaintexts_chunk.to_owned(),
         );
+    }
+
+    cpa.finalize();
+
+    cpa
+}
+
+fn cpa_normal_parallel(leakages: &Array2<f64>, plaintexts: &Array2<u8>) -> cpa_normal::Cpa {
+    let chunk_size = 500;
+
+    let mut cpa = zip(
+        leakages.axis_chunks_iter(Axis(0), chunk_size),
+        plaintexts.axis_chunks_iter(Axis(0), chunk_size),
+    )
+    .par_bridge()
+    .map(|(leakages_chunk, plaintexts_chunk)| {
+        let mut cpa =
+            cpa_normal::Cpa::new(leakages.shape()[1], chunk_size, 256, leakage_model_normal);
+        cpa.update(
+            leakages_chunk.map(|&x| x as f32),
+            plaintexts_chunk.to_owned(),
+        );
+        cpa
+    })
+    .reduce(
+        || cpa_normal::Cpa::new(leakages.shape()[1], chunk_size, 256, leakage_model_normal),
+        |x, y| x + y,
+    );
 
     cpa.finalize();
 
@@ -70,14 +126,27 @@ fn bench_cpa(c: &mut Criterion) {
         );
 
         group.bench_with_input(
-            BenchmarkId::new("sequential", nb_traces),
+            BenchmarkId::new("cpa_sequential", nb_traces),
             &(&leakages, &plaintexts),
             |b, (leakages, plaintexts)| b.iter(|| cpa_sequential(leakages, plaintexts)),
         );
         group.bench_with_input(
-            BenchmarkId::new("parallel", nb_traces),
+            BenchmarkId::new("cpa_parallel", nb_traces),
             &(&leakages, &plaintexts),
             |b, (leakages, plaintexts)| b.iter(|| cpa_parallel(leakages, plaintexts)),
+        );
+        // For 25000 traces, 60s of measurement_time is too low
+        if nb_traces <= 10000 {
+            group.bench_with_input(
+                BenchmarkId::new("cpa_normal_sequential", nb_traces),
+                &(&leakages, &plaintexts),
+                |b, (leakages, plaintexts)| b.iter(|| cpa_normal_sequential(leakages, plaintexts)),
+            );
+        }
+        group.bench_with_input(
+            BenchmarkId::new("cpa_normal_parallel", nb_traces),
+            &(&leakages, &plaintexts),
+            |b, (leakages, plaintexts)| b.iter(|| cpa_normal_parallel(leakages, plaintexts)),
         );
     }
 
