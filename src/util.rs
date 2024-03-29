@@ -1,15 +1,11 @@
 //! Convenient utility functions.
 
-use std::{
-    fs::File,
-    io::{self, BufWriter},
-    time::Duration,
-};
+use std::{fs::File, io::BufWriter, time::Duration};
 
 use indicatif::{ProgressBar, ProgressStyle};
 use ndarray::{Array, Array1, Array2, ArrayView2};
 use ndarray_npy::{write_npy, ReadNpyExt, ReadableElement, WriteNpyExt};
-use npyz::{Deserialize, NpyFile, WriterBuilder};
+use npyz::{Deserialize, NpyFile};
 
 /// Reads a [`NpyFile`] as a [`Array1`]
 ///
@@ -19,7 +15,7 @@ use npyz::{Deserialize, NpyFile, WriterBuilder};
 pub fn read_array_1_from_npy_file<T: Deserialize, R: std::io::Read>(npy: NpyFile<R>) -> Array1<T> {
     let mut v: Vec<T> = Vec::new();
     v.reserve_exact(npy.shape()[0] as usize);
-    v.extend(npy.data().unwrap().into_iter().map(|x| x.unwrap()));
+    v.extend(npy.data().unwrap().map(|x| x.unwrap()));
     Array::from_vec(v)
 }
 
