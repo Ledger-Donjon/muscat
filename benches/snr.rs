@@ -1,23 +1,23 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use muscat::processors::Snr;
-use ndarray::{Array2, Axis};
+use ndarray::{Array1, Array2, Axis};
 use ndarray_rand::rand::{rngs::StdRng, SeedableRng};
 use ndarray_rand::rand_distr::Uniform;
 use ndarray_rand::RandomExt;
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use std::iter::zip;
 
-fn snr_sequential(leakages: &Array2<i64>, plaintexts: &Array2<u8>) -> Snr {
+fn snr_sequential(leakages: &Array2<i64>, plaintexts: &Array2<u8>) -> Array1<f64> {
     let mut snr = Snr::new(leakages.shape()[1], 256);
 
     for i in 0..leakages.shape()[0] {
         snr.process(&leakages.row(i), plaintexts.row(i)[0] as usize);
     }
 
-    snr
+    snr.snr()
 }
 
-fn snr_parallel(leakages: &Array2<i64>, plaintexts: &Array2<u8>) -> Snr {
+fn snr_parallel(leakages: &Array2<i64>, plaintexts: &Array2<u8>) -> Array1<f64> {
     let chunk_size = 500;
 
     zip(
@@ -35,6 +35,7 @@ fn snr_parallel(leakages: &Array2<i64>, plaintexts: &Array2<u8>) -> Snr {
         snr
     })
     .reduce(|| Snr::new(leakages.shape()[1], 256), |a, b| a + b)
+    .snr()
 }
 
 fn bench_snr(c: &mut Criterion) {

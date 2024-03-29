@@ -118,7 +118,7 @@ fn bench_cpa(c: &mut Criterion) {
     group.measurement_time(std::time::Duration::from_secs(60));
 
     for nb_traces in [5000, 10000, 25000].into_iter() {
-        let leakages = Array2::random_using((nb_traces, 5000), Uniform::new(-2f64, 2f64), &mut rng);
+        let leakages = Array2::random_using((nb_traces, 5000), Uniform::new(-2., 2.), &mut rng);
         let plaintexts = Array2::random_using(
             (nb_traces, 16),
             Uniform::new_inclusive(0u8, 255u8),
