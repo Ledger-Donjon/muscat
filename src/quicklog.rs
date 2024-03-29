@@ -2,13 +2,11 @@
 
 use ndarray::Array1;
 use npyz::{Deserialize, NpyFile};
-use serde_json::map::IntoIter;
 use std::{
     fs::File,
-    io::{BufRead, BufReader, Error, Lines, Seek, SeekFrom},
+    io::{BufRead, BufReader, Lines, Seek, SeekFrom},
     marker::PhantomData,
     path::Path,
-    time::Instant,
 };
 
 use crate::{trace::Trace, util::read_array_1_from_npy_file};
@@ -99,6 +97,7 @@ impl<T: Deserialize> Log<T> {
     }
 
     /// Returns the number of records in the log
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.records.len()
     }
@@ -180,7 +179,7 @@ impl<T: Deserialize> Record<T> {
             let buf = BufReader::new(f);
             let npy = NpyFile::new(buf).unwrap();
             Ok(read_array_1_from_npy_file(npy))
-        } else if let Some(tid) = self.tid() {
+        } else if let Some(_tid) = self.tid() {
             // Trace is stored in a single file
             todo!()
         } else {
@@ -254,13 +253,18 @@ impl CachedLoader {
                 self.current_path = Some(path)
             }
             let toff = record.toff();
-            let start = Instant::now();
             let chunk = &self.current_data.as_slice()[toff as usize..];
             let npy = NpyFile::new(chunk).unwrap();
             Ok(read_array_1_from_npy_file(npy))
         } else {
             record.load_trace()
         }
+    }
+}
+
+impl Default for CachedLoader {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -275,12 +279,18 @@ pub struct Batch<T, U> {
 }
 
 impl<T, U> Batch<T, U> {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             file: Vec::new(),
             toffs_and_values: Vec::new(),
             phantom: PhantomData,
         }
+    }
+}
+
+impl<T, U> Default for Batch<T, U> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -403,7 +413,7 @@ impl<T: Deserialize, U> Iterator for BatchTraceIterator<T, U> {
 }
 
 pub fn array_from_bytes<T: Deserialize>(bytes: &[u8], toff: usize) -> Array1<T> {
-    let chunk = &bytes[toff as usize..];
+    let chunk = &bytes[toff..];
     let npy = NpyFile::new(chunk).unwrap();
     read_array_1_from_npy_file(npy)
 }

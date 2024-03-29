@@ -91,6 +91,7 @@ impl Cpa {
             let _sigkeys = self.sig_keys[i] as f32 / self.len_leakages as f32;
             let _sumkeys = self.sum_keys[i] as f32 / self.len_leakages as f32;
             let lower1: f32 = _sigkeys - (_sumkeys * _sumkeys);
+
             /* Parallel operation using multi-threading */
             let tmp: Vec<f32> = (0..self.len_samples)
                 .into_par_iter()
@@ -108,6 +109,7 @@ impl Cpa {
                 })
                 .collect();
 
+            #[allow(clippy::needless_range_loop)]
             for z in 0..self.len_samples {
                 self.corr[[i, z]] = tmp[z];
             }

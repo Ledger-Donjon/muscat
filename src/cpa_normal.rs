@@ -32,7 +32,7 @@ impl Cpa {
         Self {
             len_samples: size,
             chunk: patch,
-            guess_range: guess_range,
+            guess_range,
             sum_leakages: Array1::zeros(size),
             sum2_leakages: Array1::zeros(size),
             sum_keys: Array1::zeros(guess_range as usize),
@@ -133,7 +133,7 @@ impl Cpa {
 
                 let denominator_2: f32 = std_leakages[x] - (avg_leakages[x] * avg_leakages[x]);
                 if numerator != 0.0 {
-                    self.corr[[i as usize, x]] =
+                    self.corr[[i, x]] =
                         f32::abs(numerator / f32::sqrt(denominator_1 * denominator_2));
                 }
             }

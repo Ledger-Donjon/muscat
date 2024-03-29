@@ -6,7 +6,7 @@ use crate::processors::MeanVar;
 
 /// Computes the centered product of "order" leakage samples
 /// Used particularly when performing high-order SCA
-struct CenteredProduct {
+pub struct CenteredProduct {
     /// Sum of traces
     acc: Array1<i64>,
     /// Number of traces processed
@@ -30,7 +30,7 @@ impl CenteredProduct {
         Self {
             acc: Array1::zeros(size),
             count: 0,
-            intervals: intervals,
+            intervals,
             processed: false,
             mean: Array1::zeros(size),
         }
@@ -58,13 +58,13 @@ impl CenteredProduct {
     /// The centered product substract the mean of the traces and then perform products between every input time samples
     pub fn apply<T: Into<f64> + Copy>(&mut self, trace: &ArrayView1<T>) -> Array1<f64> {
         // First we substract the mean trace
-        let centered_trace: Array1<f64> = trace.mapv(|x| f64::from(x.into())) - &self.mean;
+        let centered_trace: Array1<f64> = trace.mapv(|x| x.into()) - &self.mean;
         let length_out_trace: usize = self.intervals.iter().map(|x| x.len()).product();
 
         let mut centered_product_trace = Array1::ones(length_out_trace);
 
         // Then we do the products
-        let mut multi_prod = (0..self.intervals.len())
+        let multi_prod = (0..self.intervals.len())
             .map(|i| self.intervals[i].clone())
             .multi_cartesian_product(); //NOTE/TODO: maybe this can go in the struct parameters, which could improve performances
 
@@ -75,12 +75,13 @@ impl CenteredProduct {
             }
         }
         println! {"{:?}",centered_product_trace};
-        return centered_product_trace;
+
+        centered_product_trace
     }
 }
 
 /// Elevates parts of a trace to a certain power
-struct Power {
+pub struct Power {
     intervals: Vec<Range<i32>>,
     power: i32,
 }
@@ -90,14 +91,10 @@ impl Power {
     ///
     /// # Arguments
     ///
-    /// * `size` - Number of samples per trace
     /// * `intervals` - Intervals to elevate to the power
     /// * `power` - Power to elevate
-    pub fn new(size: usize, intervals: Vec<Range<i32>>, power: i32) -> Self {
-        Self {
-            intervals: intervals,
-            power: power,
-        }
+    pub fn new(intervals: Vec<Range<i32>>, power: i32) -> Self {
+        Self { intervals, power }
     }
 
     /// Processes an input trace
@@ -115,7 +112,7 @@ impl Power {
 }
 
 /// Standardization of the traces by removing the mean and scaling to unit variance
-struct StandardScaler {
+pub struct StandardScaler {
     /// meanVar processor
     meanvar: MeanVar,
     /// mean
@@ -146,7 +143,7 @@ impl StandardScaler {
 
     /// Apply the processing to an input trace
     pub fn apply<T: Into<f64> + Copy>(&mut self, trace: &ArrayView1<T>) -> Array1<f64> {
-        (trace.mapv(|x| f64::from(x.into())) - &self.mean) / &self.std
+        (trace.mapv(|x| x.into()) - &self.mean) / &self.std
     }
 }
 
@@ -159,7 +156,7 @@ mod tests {
     use ndarray::array;
 
     fn round_to_2_digits(x: f64) -> f64 {
-        return (x * 100 as f64).round() / 100 as f64;
+        (x * 100f64).round() / 100f64
     }
 
     #[test]

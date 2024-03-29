@@ -1,5 +1,4 @@
 //! Defines the [`Trace`] storage structure.
-
 use ndarray::Array1;
 
 /// A side channel leakage record associated to its leakage data.
@@ -18,6 +17,7 @@ impl<T, U> Trace<T, U> {
     }
 
     /// Returns the number of points in the leakage waveform.
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.leakage.len()
     }
