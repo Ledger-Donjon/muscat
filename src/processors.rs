@@ -1,15 +1,15 @@
 //! Traces processing algorithms, such as T-Test, SNR, etc.
 use ndarray::{s, Array1, Array2, ArrayView1, Axis};
 use rayon::iter::{ParallelBridge, ParallelIterator};
-use std::ops::Add;
+use std::{iter::zip, ops::Add};
 
 /// Processes traces to calculate mean and variance.
 #[derive(Clone)]
 pub struct MeanVar {
     /// Sum of traces
-    acc_1: Array1<i64>,
+    sum: Array1<i64>,
     /// Sum of square of traces
-    acc_2: Array1<i64>,
+    sum_squares: Array1<i64>,
     /// Number of traces processed
     count: usize,
 }
@@ -22,39 +22,42 @@ impl MeanVar {
     /// * `size` - Number of samples per trace
     pub fn new(size: usize) -> Self {
         Self {
-            acc_1: Array1::zeros(size),
-            acc_2: Array1::zeros(size),
+            sum: Array1::zeros(size),
+            sum_squares: Array1::zeros(size),
             count: 0,
         }
     }
 
     /// Processes an input trace to update internal accumulators.
+    ///
+    /// # Panics
+    /// Panics in debug if the length of the trace is different form the size of [`MeanVar`].
     pub fn process<T: Into<i64> + Copy>(&mut self, trace: &ArrayView1<T>) {
-        let size = self.acc_1.len();
-        for i in 0..size {
+        debug_assert!(trace.len() == self.sum.len());
+
+        for i in 0..self.sum.len() {
             let x = trace[i].into();
-            self.acc_1[i] += x;
-            self.acc_2[i] += x * x;
+
+            self.sum[i] += x;
+            self.sum_squares[i] += x * x;
         }
-        self.count += 1
+
+        self.count += 1;
     }
 
     /// Returns trace mean.
     pub fn mean(&self) -> Array1<f64> {
-        self.acc_1.map(|&x| x as f64 / self.count as f64)
+        let count = self.count as f64;
+
+        self.sum.map(|&x| x as f64 / count)
     }
 
     /// Calculates and returns traces variance.
     pub fn var(&self) -> Array1<f64> {
-        self.acc_1
-            .iter()
-            .zip(self.acc_2.iter())
-            .map(|(&acc_1, &acc_2)| {
-                let acc_1 = acc_1 as f64;
-                let acc_2 = acc_2 as f64;
-                let count = self.count as f64;
-                (acc_2 / count) - (acc_1 / count).powi(2)
-            })
+        let count = self.count as f64;
+
+        zip(self.sum.iter(), self.sum_squares.iter())
+            .map(|(&sum, &sum_squares)| (sum_squares as f64 / count) - (sum as f64 / count).powi(2))
             .collect()
     }
 
@@ -69,8 +72,8 @@ impl Add for MeanVar {
 
     fn add(self, rhs: Self) -> Self::Output {
         Self {
-            acc_1: self.acc_1 + rhs.acc_1,
-            acc_2: self.acc_2 + rhs.acc_2,
+            sum: self.sum + rhs.sum,
+            sum_squares: self.sum_squares + rhs.sum_squares,
             count: self.count + rhs.count,
         }
     }
@@ -115,9 +118,12 @@ where
 #[derive(Clone)]
 pub struct Snr {
     mean_var: MeanVar,
-    part_acc_1: Array2<i64>,
-    part_acc_2: Array2<i64>,
-    counters: Array1<usize>,
+    /// Sum of traces per class
+    classes_sum: Array2<i64>,
+    /// Sum of square of traces per class
+    classes_sum_squares: Array2<i64>,
+    /// Counts the number of traces per class
+    classes_count: Array1<usize>,
 }
 
 impl Snr {
@@ -126,40 +132,51 @@ impl Snr {
     /// # Arguments
     ///
     /// * `size` - Size of the input traces
+    /// * `classes` - Number of classes
     pub fn new(size: usize, classes: usize) -> Self {
         Self {
             mean_var: MeanVar::new(size),
-            part_acc_1: Array2::zeros((classes, size)),
-            part_acc_2: Array2::zeros((classes, size)),
-            counters: Array1::zeros(classes),
+            classes_sum: Array2::zeros((classes, size)),
+            classes_sum_squares: Array2::zeros((classes, size)),
+            classes_count: Array1::zeros(classes),
         }
     }
 
     /// Processes an input trace to update internal accumulators.
+    ///
+    /// # Panics
+    /// Panics in debug if the length of the trace is different from the size of [`Snr`].
     pub fn process<T: Into<i64> + Copy>(&mut self, trace: &ArrayView1<T>, class: usize) {
+        debug_assert!(trace.len() == self.classes_sum.shape()[1]);
+
         self.mean_var.process(trace);
-        let size = self.part_acc_1.shape()[1];
-        self.counters[class] += 1;
-        for i in 0..size {
-            self.part_acc_1[[class, i]] += trace[i].into();
-            self.part_acc_2[[class, i]] += (trace[i].into()).pow(2);
+
+        for i in 0..self.classes_sum.shape()[1] {
+            self.classes_sum[[class, i]] += trace[i].into();
+            self.classes_sum_squares[[class, i]] += (trace[i].into()).pow(2);
         }
+
+        self.classes_count[class] += 1;
     }
 
     /// Returns Signal-to-Noise Ratio of the traces.
+    /// SNR = V[E[L|X]] / E[V[L|X]]
     pub fn snr(&self) -> Array1<f64> {
-        let size = self.part_acc_1.shape()[1];
-        let classes = self.part_acc_1.shape()[0];
+        let size = self.classes_sum.shape()[1];
+        let classes = self.classes_sum.shape()[0];
+
         let mut acc: Array1<f64> = Array1::zeros(size);
         for class in 0..classes {
-            let acc_1 = self.part_acc_1.slice(s![class, ..]);
-            let count = self.counters[class] as f64;
-            if self.counters[class] > 0 {
-                for j in 0..size {
-                    acc[j] += (acc_1[j] as f64).powf(2.0) / count;
-                }
+            if self.classes_count[class] == 0 {
+                continue;
+            }
+
+            let class_sum = self.classes_sum.slice(s![class, ..]);
+            for i in 0..size {
+                acc[i] += (class_sum[i] as f64).powf(2.0) / (self.classes_count[class] as f64);
             }
         }
+
         let var = self.mean_var.var();
         let mean = self.mean_var.mean();
         // V[E[L|X]]
@@ -174,9 +191,9 @@ impl Add for Snr {
     fn add(self, rhs: Self) -> Self::Output {
         Self {
             mean_var: self.mean_var + rhs.mean_var,
-            part_acc_1: self.part_acc_1 + rhs.part_acc_1,
-            part_acc_2: self.part_acc_2 + rhs.part_acc_2,
-            counters: self.counters + rhs.counters,
+            classes_sum: self.classes_sum + rhs.classes_sum,
+            classes_sum_squares: self.classes_sum_squares + rhs.classes_sum_squares,
+            classes_count: self.classes_count + rhs.classes_count,
         }
     }
 }
@@ -206,7 +223,12 @@ impl TTest {
     ///
     /// * `trace` - Input trace.
     /// * `class` - Indicates to which of the two partitions the given trace belongs.
+    ///
+    /// # Panics
+    /// Panics in debug if `trace.len() != self.mean_var_1.sum.len()`.
     pub fn process<T: Into<i64> + Copy>(&mut self, trace: &ArrayView1<T>, class: bool) {
+        debug_assert!(trace.len() == self.mean_var_1.sum.len());
+
         if class {
             self.mean_var_2.process(trace);
         } else {
@@ -218,6 +240,7 @@ impl TTest {
     pub fn ttest(&self) -> Array1<f64> {
         // E(X1) - E(X2)
         let q = self.mean_var_1.mean() - self.mean_var_2.mean();
+
         // √(σ1²/N1 + σ2²/N2)
         let d = ((self.mean_var_1.var() / self.mean_var_1.count() as f64)
             + (self.mean_var_2.var() / self.mean_var_2.count() as f64))
