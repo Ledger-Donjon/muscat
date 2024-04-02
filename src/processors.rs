@@ -1,5 +1,6 @@
 //! Traces processing algorithms, such as T-Test, SNR, etc.
-use ndarray::{s, Array1, Array2, ArrayView1};
+use ndarray::{s, Array1, Array2, ArrayView1, Axis};
+use rayon::iter::{ParallelBridge, ParallelIterator};
 use std::ops::Add;
 
 /// Processes traces to calculate mean and variance.
@@ -73,6 +74,41 @@ impl Add for MeanVar {
             count: self.count + rhs.count,
         }
     }
+}
+
+/// Computes the SNR of the given traces.
+///
+/// `get_class` is a function returning the class of the given trace by index.
+///
+/// # Panics
+/// Panic if `chunk_size` is 0.
+pub fn compute_snr<T, F>(
+    leakages: &Array2<T>,
+    classes: usize,
+    get_class: F,
+    chunk_size: usize,
+) -> Array1<f64>
+where
+    T: Into<i64> + Copy + Sync,
+    F: Fn(usize) -> usize + Sync,
+{
+    assert!(chunk_size > 0);
+
+    leakages
+        .axis_chunks_iter(Axis(0), chunk_size)
+        .enumerate()
+        .par_bridge()
+        .map(|(chunk_idx, leakages_chunk)| {
+            let mut snr = Snr::new(leakages.shape()[1], classes);
+
+            for i in 0..leakages_chunk.shape()[0] {
+                snr.process(&leakages_chunk.row(i), get_class(chunk_idx + i));
+            }
+
+            snr
+        })
+        .reduce(|| Snr::new(leakages.shape()[1], classes), |a, b| a + b)
+        .snr()
 }
 
 /// Processes traces to calculate the Signal-to-Noise Ratio.

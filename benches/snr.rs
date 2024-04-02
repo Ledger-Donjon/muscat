@@ -1,11 +1,9 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use muscat::processors::Snr;
-use ndarray::{Array1, Array2, Axis};
+use muscat::processors::{compute_snr, Snr};
+use ndarray::{Array1, Array2};
 use ndarray_rand::rand::{rngs::StdRng, SeedableRng};
 use ndarray_rand::rand_distr::Uniform;
 use ndarray_rand::RandomExt;
-use rayon::iter::{ParallelBridge, ParallelIterator};
-use std::iter::zip;
 
 fn snr_sequential(leakages: &Array2<i64>, plaintexts: &Array2<u8>) -> Array1<f64> {
     let mut snr = Snr::new(leakages.shape()[1], 256);
@@ -18,24 +16,7 @@ fn snr_sequential(leakages: &Array2<i64>, plaintexts: &Array2<u8>) -> Array1<f64
 }
 
 fn snr_parallel(leakages: &Array2<i64>, plaintexts: &Array2<u8>) -> Array1<f64> {
-    let chunk_size = 500;
-
-    zip(
-        leakages.axis_chunks_iter(Axis(0), chunk_size),
-        plaintexts.axis_chunks_iter(Axis(0), chunk_size),
-    )
-    .par_bridge()
-    .map(|(leakages_chunk, plaintexts_chunk)| {
-        let mut snr = Snr::new(leakages.shape()[1], 256);
-
-        for i in 0..leakages_chunk.shape()[0] {
-            snr.process(&leakages_chunk.row(i), plaintexts_chunk.row(i)[0] as usize);
-        }
-
-        snr
-    })
-    .reduce(|| Snr::new(leakages.shape()[1], 256), |a, b| a + b)
-    .snr()
+    compute_snr(leakages, 256, |i| plaintexts.row(i)[0].into(), 500)
 }
 
 fn bench_snr(c: &mut Criterion) {
