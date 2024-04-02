@@ -120,8 +120,6 @@ pub struct Snr {
     mean_var: MeanVar,
     /// Sum of traces per class
     classes_sum: Array2<i64>,
-    /// Sum of square of traces per class
-    classes_sum_squares: Array2<i64>,
     /// Counts the number of traces per class
     classes_count: Array1<usize>,
 }
@@ -137,7 +135,6 @@ impl Snr {
         Self {
             mean_var: MeanVar::new(size),
             classes_sum: Array2::zeros((classes, size)),
-            classes_sum_squares: Array2::zeros((classes, size)),
             classes_count: Array1::zeros(classes),
         }
     }
@@ -153,7 +150,6 @@ impl Snr {
 
         for i in 0..self.classes_sum.shape()[1] {
             self.classes_sum[[class, i]] += trace[i].into();
-            self.classes_sum_squares[[class, i]] += (trace[i].into()).pow(2);
         }
 
         self.classes_count[class] += 1;
@@ -192,7 +188,6 @@ impl Add for Snr {
         Self {
             mean_var: self.mean_var + rhs.mean_var,
             classes_sum: self.classes_sum + rhs.classes_sum,
-            classes_sum_squares: self.classes_sum_squares + rhs.classes_sum_squares,
             classes_count: self.classes_count + rhs.classes_count,
         }
     }
