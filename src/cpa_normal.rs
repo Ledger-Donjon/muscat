@@ -1,5 +1,46 @@
 use ndarray::{concatenate, Array1, Array2, ArrayView1, ArrayView2, Axis};
-use std::ops::Add;
+use rayon::iter::{ParallelBridge, ParallelIterator};
+use std::{iter::zip, ops::Add};
+
+/// Computes the [`Cpa`] of the given traces.
+///
+/// # Panics
+/// - Panic if `leakages.shape()[0] != plaintexts.shape()[0]`
+/// - Panic if `chunk_size` is 0.
+pub fn cpa<T, U>(
+    leakages: &Array2<T>,
+    plaintexts: &Array2<U>,
+    guess_range: usize,
+    leakage_func: fn(ArrayView1<usize>, usize) -> usize,
+    chunk_size: usize,
+) -> Cpa
+where
+    T: Into<f32> + Copy + Sync,
+    U: Into<usize> + Copy + Sync,
+{
+    assert_eq!(leakages.shape()[0], plaintexts.shape()[0]);
+    assert!(chunk_size > 0);
+
+    let mut cpa = zip(
+        leakages.axis_chunks_iter(Axis(0), chunk_size),
+        plaintexts.axis_chunks_iter(Axis(0), chunk_size),
+    )
+    .par_bridge()
+    .map(|(leakages_chunk, plaintexts_chunk)| {
+        let mut cpa = Cpa::new(leakages.shape()[1], chunk_size, guess_range, leakage_func);
+        cpa.update(leakages_chunk.to_owned(), plaintexts_chunk.to_owned());
+        cpa
+    })
+    .reduce(
+        || Cpa::new(leakages.shape()[1], chunk_size, guess_range, leakage_func),
+        |x, y| x + y,
+    );
+
+    cpa.finalize();
+
+    cpa
+}
+
 pub struct Cpa {
     /* List of internal class variables */
     sum_leakages: Array1<f32>,
