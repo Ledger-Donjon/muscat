@@ -1,10 +1,10 @@
+use anyhow::Result;
 use indicatif::ProgressIterator;
 use muscat::cpa::*;
 use muscat::leakage::{hw, sbox};
-use muscat::util::{progress_bar, read_array_2_from_npy_file, save_array};
+use muscat::util::{progress_bar, read_array2_from_npy_file, save_array};
 use ndarray::*;
 use rayon::prelude::{ParallelBridge, ParallelIterator};
-use std::time::Instant;
 
 // traces format
 type FormatTraces = i16;
@@ -15,8 +15,8 @@ pub fn leakage_model(value: usize, guess: usize) -> usize {
     hw(sbox((value ^ guess) as u8) as usize)
 }
 
-fn rank() {
-    let size: usize = 5000; // Number of samples
+fn rank() -> Result<()> {
+    let size = 5000; // Number of samples
     let guess_range = 256; // 2**(key length)
     let target_byte = 1;
     let folder = String::from("../../data");
@@ -26,8 +26,8 @@ fn rank() {
     for file in (0..nfiles).progress_with(progress_bar(nfiles)) {
         let dir_l = format!("{folder}/l{file}.npy");
         let dir_p = format!("{folder}/p{file}.npy");
-        let leakages: Array2<FormatTraces> = read_array_2_from_npy_file(&dir_l);
-        let plaintext: Array2<FormatMetadata> = read_array_2_from_npy_file(&dir_p);
+        let leakages = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
+        let plaintext = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
         let len_file = leakages.shape()[0];
         for sample in (0..len_file).step_by(chunk) {
             let l_sample: ndarray::ArrayBase<
@@ -36,7 +36,6 @@ fn rank() {
             > = leakages.slice(s![sample..sample + chunk, ..]);
             let p_sample = plaintext.slice(s![sample..sample + chunk, ..]);
             let x = (0..chunk)
-                .into_iter()
                 .par_bridge()
                 .fold(
                     || Cpa::new(size, guess_range, target_byte, leakage_model),
@@ -56,10 +55,15 @@ fn rank() {
             rank.finalize();
         }
     }
+
     // save rank key curves in npy
-    save_array("../results/rank.npy", &rank.pass_rank());
+    save_array("../results/rank.npy", &rank.pass_rank())?;
+
+    Ok(())
 }
 
-fn main() {
-    rank();
+fn main() -> Result<()> {
+    rank()?;
+
+    Ok(())
 }
