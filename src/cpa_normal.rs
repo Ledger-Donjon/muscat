@@ -8,7 +8,7 @@ pub struct Cpa {
     sum2_keys: Array1<f32>,
     values: Array2<f32>,
     len_leakages: usize,
-    guess_range: i32,
+    guess_range: usize,
     cov: Array2<f32>,
     corr: Array2<f32>,
     max_corr: Array2<f32>,
@@ -26,8 +26,8 @@ impl Cpa {
     pub fn new(
         size: usize,
         patch: usize,
-        guess_range: i32,
-        f: fn(ArrayView1<usize>, usize) -> usize,
+        guess_range: usize,
+        leakage_func: fn(ArrayView1<usize>, usize) -> usize,
     ) -> Self {
         Self {
             len_samples: size,
@@ -35,28 +35,28 @@ impl Cpa {
             guess_range,
             sum_leakages: Array1::zeros(size),
             sum2_leakages: Array1::zeros(size),
-            sum_keys: Array1::zeros(guess_range as usize),
-            sum2_keys: Array1::zeros(guess_range as usize),
-            values: Array2::zeros((patch, guess_range as usize)),
-            cov: Array2::zeros((guess_range as usize, size)),
-            corr: Array2::zeros((guess_range as usize, size)),
-            max_corr: Array2::zeros((guess_range as usize, 1)),
-            rank_slice: Array2::zeros((guess_range as usize, 1)),
-            leakage_func: f,
+            sum_keys: Array1::zeros(guess_range),
+            sum2_keys: Array1::zeros(guess_range),
+            values: Array2::zeros((patch, guess_range)),
+            cov: Array2::zeros((guess_range, size)),
+            corr: Array2::zeros((guess_range, size)),
+            max_corr: Array2::zeros((guess_range, 1)),
+            rank_slice: Array2::zeros((guess_range, 1)),
+            leakage_func,
             len_leakages: 0,
             rank_traces: 0,
         }
     }
 
-    pub fn update<T: Copy, U: Copy>(&mut self, trace_patch: Array2<T>, plaintext_patch: Array2<U>)
+    pub fn update<T, U>(&mut self, trace_patch: Array2<T>, plaintext_patch: Array2<U>)
     where
-        f32: From<T>,
-        usize: From<U>,
+        T: Into<f32> + Copy,
+        U: Into<usize> + Copy,
     {
         /* This function updates the internal arrays of the CPA
         It accepts trace_patch and plaintext_patch to update them*/
-        let tmp_traces = trace_patch.map(|t| f32::from(*t));
-        let metadat = plaintext_patch.map(|m| usize::from(*m));
+        let tmp_traces = trace_patch.map(|&t| t.into());
+        let metadat = plaintext_patch.map(|&m| m.into());
         self.len_leakages += self.chunk;
         self.update_values(&metadat, &tmp_traces, self.guess_range);
         self.update_key_leakages(tmp_traces, self.guess_range);
@@ -66,33 +66,29 @@ impl Cpa {
         /* This function generates the values and cov arrays */
         &mut self,
         metadata: &Array2<usize>,
-        _trace: &Array2<f32>,
-        _guess_range: i32,
+        trace: &Array2<f32>,
+        guess_range: usize,
     ) {
         for row in 0..self.chunk {
-            for guess in 0.._guess_range {
+            for guess in 0..guess_range {
                 let pass_to_leakage: ArrayView1<usize> = metadata.row(row);
-                self.values[[row, guess as usize]] =
-                    (self.leakage_func)(pass_to_leakage, guess as usize) as f32;
+                self.values[[row, guess]] = (self.leakage_func)(pass_to_leakage, guess) as f32;
             }
         }
 
-        self.cov = self.cov.clone() + self.values.t().dot(_trace);
+        self.cov = self.cov.clone() + self.values.t().dot(trace);
     }
 
-    pub fn update_key_leakages(&mut self, _trace: Array2<f32>, _guess_range: i32) {
+    pub fn update_key_leakages(&mut self, trace: Array2<f32>, guess_range: usize) {
         for i in 0..self.len_samples {
-            self.sum_leakages[i] += _trace.column(i).sum(); // _trace[i] as usize;
-            self.sum2_leakages[i] += _trace.column(i).dot(&_trace.column(i)); // (_trace[i] * _trace[i]) as usize;
+            self.sum_leakages[i] += trace.column(i).sum(); // trace[i] as usize;
+            self.sum2_leakages[i] += trace.column(i).dot(&trace.column(i)); // (trace[i] * trace[i]) as usize;
         }
 
-        for guess in 0.._guess_range {
-            self.sum_keys[guess as usize] += self.values.column(guess as usize).sum(); //self.values[guess as usize] as usize;
-            self.sum2_keys[guess as usize] += self
-                .values
-                .column(guess as usize)
-                .dot(&self.values.column(guess as usize));
-            // (self.values[guess as usize] * self.values[guess as usize]) as usize;
+        for guess in 0..guess_range {
+            self.sum_keys[guess] += self.values.column(guess).sum(); //self.values[guess] as usize;
+            self.sum2_keys[guess] += self.values.column(guess).dot(&self.values.column(guess));
+            // (self.values[guess] * self.values[guess]) as usize;
         }
     }
 
@@ -119,19 +115,19 @@ impl Cpa {
     pub fn finalize(&mut self) {
         /* This function finalizes the calculation after
         feeding all stored acc arrays */
-        let cov_n: Array2<f32> = self.cov.clone() / self.len_leakages as f32;
-        let avg_keys: Array1<f32> = self.sum_keys.clone() / self.len_leakages as f32;
-        let std_key: Array1<f32> = self.sum2_keys.clone() / self.len_leakages as f32;
-        let avg_leakages: Array1<f32> = self.sum_leakages.clone() / self.len_leakages as f32;
-        let std_leakages: Array1<f32> = self.sum2_leakages.clone() / self.len_leakages as f32;
+        let cov_n = self.cov.clone() / self.len_leakages as f32;
+        let avg_keys = self.sum_keys.clone() / self.len_leakages as f32;
+        let std_key = self.sum2_keys.clone() / self.len_leakages as f32;
+        let avg_leakages = self.sum_leakages.clone() / self.len_leakages as f32;
+        let std_leakages = self.sum2_leakages.clone() / self.len_leakages as f32;
 
-        for i in 0..self.guess_range as usize {
+        for i in 0..self.guess_range {
             for x in 0..self.len_samples {
-                let numerator: f32 = cov_n[[i, x]] - (avg_keys[i] * avg_leakages[x]);
+                let numerator = cov_n[[i, x]] - (avg_keys[i] * avg_leakages[x]);
 
-                let denominator_1: f32 = std_key[i] - (avg_keys[i] * avg_keys[i]);
+                let denominator_1 = std_key[i] - (avg_keys[i] * avg_keys[i]);
 
-                let denominator_2: f32 = std_leakages[x] - (avg_leakages[x] * avg_leakages[x]);
+                let denominator_2 = std_leakages[x] - (avg_leakages[x] * avg_leakages[x]);
                 if numerator != 0.0 {
                     self.corr[[i, x]] =
                         f32::abs(numerator / f32::sqrt(denominator_1 * denominator_2));
@@ -143,7 +139,7 @@ impl Cpa {
 
     pub fn select_max(&mut self) {
         for i in 0..self.guess_range {
-            let row = self.corr.row(i as usize);
+            let row = self.corr.row(i);
             // Calculating the max value in the row
             let max_value = row
                 .into_iter()
@@ -155,7 +151,7 @@ impl Cpa {
                     tmp
                 })
                 .unwrap();
-            self.max_corr[[i as usize, 0]] = *max_value;
+            self.max_corr[[i, 0]] = *max_value;
         }
     }
 
@@ -171,12 +167,12 @@ impl Cpa {
         self.corr.clone()
     }
 
-    pub fn pass_guess(&self) -> i32 {
-        let mut init_value: f32 = 0.0;
-        let mut guess: i32 = 0;
+    pub fn pass_guess(&self) -> usize {
+        let mut init_value = 0.0;
+        let mut guess = 0;
         for i in 0..self.guess_range {
-            if self.max_corr[[i as usize, 0]] > init_value {
-                init_value = self.max_corr[[i as usize, 0]];
+            if self.max_corr[[i, 0]] > init_value {
+                init_value = self.max_corr[[i, 0]];
                 guess = i;
             }
         }

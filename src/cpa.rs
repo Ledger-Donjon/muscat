@@ -25,7 +25,7 @@ impl Cpa {
         size: usize,
         guess_range: usize,
         target_byte: usize,
-        f: fn(usize, usize) -> usize,
+        leakage_func: fn(usize, usize) -> usize,
     ) -> Self {
         Self {
             len_samples: size,
@@ -40,7 +40,7 @@ impl Cpa {
             corr: Array2::zeros((guess_range, size)),
             max_corr: Array2::zeros((guess_range, 1)),
             rank_slice: Array2::zeros((guess_range, 1)),
-            leakage_func: f,
+            leakage_func,
             len_leakages: 0,
         }
     }
