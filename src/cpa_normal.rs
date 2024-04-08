@@ -72,7 +72,7 @@ impl Cpa {
     ) -> Self {
         Self {
             len_samples: size,
-            chunk: batch,
+            chunk: patch,
             guess_range,
             sum_leakages: Array1::zeros(size),
             sum2_leakages: Array1::zeros(size),

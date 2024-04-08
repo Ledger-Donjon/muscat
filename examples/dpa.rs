@@ -1,7 +1,8 @@
+use anyhow::Result;
 use indicatif::ProgressIterator;
 use muscat::dpa::*;
 use muscat::leakage::sbox;
-use muscat::util::read_array_2_from_npy_file;
+use muscat::util::read_array2_from_npy_file;
 use ndarray::*;
 use rayon::iter::{ParallelBridge, ParallelIterator};
 
@@ -14,7 +15,7 @@ pub fn leakage_model(value: Array1<FormatMetadata>, guess: usize) -> usize {
     (sbox((value[1] as usize ^ guess) as u8)) as usize
 }
 
-fn dpa() {
+fn dpa() -> Result<()> {
     let start_sample: usize = 0;
     let end_sample: usize = 2000;
     let size: usize = end_sample - start_sample; // Number of samples
@@ -22,8 +23,8 @@ fn dpa() {
     let folder = String::from("../../data/cw");
     let dir_l = format!("{folder}/leakages.npy");
     let dir_p = format!("{folder}/plaintexts.npy");
-    let leakages: Array2<FormatTraces> = read_array_2_from_npy_file::<FormatTraces>(&dir_l);
-    let plaintext: Array2<FormatMetadata> = read_array_2_from_npy_file::<FormatMetadata>(&dir_p);
+    let leakages: Array2<FormatTraces> = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
+    let plaintext: Array2<FormatMetadata> = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
     let len_traces = 20000; //leakages.shape()[0];
     let mut dpa = Dpa::new(size, guess_range, leakage_model);
     for i in (0..len_traces).progress() {
@@ -37,10 +38,12 @@ fn dpa() {
     dpa.finalize();
     println!("Guessed key = {:02x}", dpa.pass_guess());
     // let corr = dpa.pass_corr_array();
+
+    Ok(())
 }
 
 #[allow(dead_code)]
-fn dpa_success() {
+fn dpa_success() -> Result<()> {
     let start_sample: usize = 0;
     let end_sample: usize = 2000;
     let size: usize = end_sample - start_sample; // Number of samples
@@ -48,8 +51,8 @@ fn dpa_success() {
     let folder = String::from("../../data/cw");
     let dir_l = format!("{folder}/leakages.npy");
     let dir_p = format!("{folder}/plaintexts.npy");
-    let leakages: Array2<FormatTraces> = read_array_2_from_npy_file::<FormatTraces>(&dir_l);
-    let plaintext: Array2<FormatMetadata> = read_array_2_from_npy_file::<FormatMetadata>(&dir_p);
+    let leakages: Array2<FormatTraces> = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
+    let plaintext: Array2<FormatMetadata> = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
     let len_traces = leakages.shape()[0];
     let mut dpa = Dpa::new(size, guess_range, leakage_model);
     let rank_traces: usize = 100;
@@ -66,10 +69,12 @@ fn dpa_success() {
 
     println!("Guessed key = {:02x}", dpa.pass_guess());
     // let succss = dpa.pass_rank().to_owned();
+
+    Ok(())
 }
 
 #[allow(dead_code)]
-fn dpa_parallel() {
+fn dpa_parallel() -> Result<()> {
     let start_sample: usize = 0;
     let end_sample: usize = 2000;
     let size: usize = end_sample - start_sample; // Number of samples
@@ -77,8 +82,8 @@ fn dpa_parallel() {
     let folder = String::from("../../data/cw");
     let dir_l = format!("{folder}/leakages.npy");
     let dir_p = format!("{folder}/plaintexts.npy");
-    let leakages: Array2<FormatTraces> = read_array_2_from_npy_file::<FormatTraces>(&dir_l);
-    let plaintext: Array2<FormatMetadata> = read_array_2_from_npy_file::<FormatMetadata>(&dir_p);
+    let leakages: Array2<FormatTraces> = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
+    let plaintext: Array2<FormatMetadata> = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
     let len_traces = 20000; //leakages.shape()[0];
     let patch: usize = 2500;
     let mut dpa = (0..len_traces)
@@ -104,8 +109,10 @@ fn dpa_parallel() {
     dpa.finalize();
     println!("{:2x}", dpa.pass_guess());
     // let corr = dpa.pass_corr_array();
+
+    Ok(())
 }
 
-fn main() {
-    dpa();
+fn main() -> Result<()> {
+    dpa()
 }
