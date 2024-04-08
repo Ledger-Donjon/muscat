@@ -17,13 +17,14 @@ pub struct Dpa<T> {
 }
 
 /* This class implements the DPA algorithm shown in:
-https://paulkocher.com/doc/DifferentialPowerAnalysis.pdf */
+https://paulkocher.com/doc/DifferentialPowerAnalysis.pdf
+https://web.mit.edu/6.857/OldStuff/Fall03/ref/kocher-DPATechInfo.pdf */
 
 impl<T: Clone> Dpa<T> {
     pub fn new(size: usize, guess_range: i32, f: fn(T, usize) -> usize) -> Self {
         Self {
             len_samples: size,
-            guess_range,
+            guess_range, //fixing clippy warning
             sum_0: Array2::zeros((guess_range as usize, size)),
             sum_1: Array2::zeros((guess_range as usize, size)),
             count_0: Array1::zeros(guess_range as usize),
