@@ -35,7 +35,7 @@ fn dpa() {
         dpa.update(tmp_trace, tmp_metadata);
     }
     dpa.finalize();
-    println!("Guessed key = {}", dpa.pass_guess());
+    println!("Guessed key = {:02x}", dpa.pass_guess());
     // let corr = dpa.pass_corr_array();
 }
 
@@ -64,7 +64,7 @@ fn dpa_success() {
         dpa.update_success(tmp_trace, tmp_metadata);
     }
 
-    println!("Guessed key = {:?}", dpa.pass_guess());
+    println!("Guessed key = {:02x}", dpa.pass_guess());
     // let succss = dpa.pass_rank().to_owned();
 }
 
@@ -102,9 +102,10 @@ fn dpa_parallel() {
         .reduce(|| Dpa::new(size, guess_range, leakage_model), |x, y| x + y);
 
     dpa.finalize();
-    println!("{:?}", dpa.pass_guess());
+    println!("{:2x}", dpa.pass_guess());
     // let corr = dpa.pass_corr_array();
 }
+
 
 fn main() {
     dpa();
