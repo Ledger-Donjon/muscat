@@ -20,7 +20,7 @@ fn cpa() {
     let start_sample: usize = 0;
     let end_sample: usize = 5000;
     let size: usize = end_sample - start_sample; // Number of samples
-    let patch: usize = 500;
+    let batch: usize = 500;
     let guess_range = 256; // 2**(key length)
     let folder = String::from("../../data/cw");
     let dir_l = format!("{folder}/leakages.npy");
@@ -28,13 +28,13 @@ fn cpa() {
     let leakages: Array2<FormatTraces> = read_array_2_from_npy_file::<FormatTraces>(&dir_l);
     let plaintext: Array2<FormatMetadata> = read_array_2_from_npy_file::<FormatMetadata>(&dir_p);
     let len_traces = leakages.shape()[0];
-    let mut cpa_parallel = ((0..len_traces).step_by(patch))
+    let mut cpa_parallel = ((0..len_traces).step_by(batch))
         .progress_with(progress_bar(len_traces))
         .map(|row| row)
         .par_bridge()
         .map(|row_number| {
-            let mut cpa = Cpa::new(size, patch, guess_range, leakage_model);
-            let range_rows = row_number..row_number + patch;
+            let mut cpa = Cpa::new(size, batch, guess_range, leakage_model);
+            let range_rows = row_number..row_number + batch;
             let range_samples = start_sample..end_sample;
             let sample_traces = leakages
                 .slice(s![range_rows.clone(), range_samples])
@@ -45,7 +45,7 @@ fn cpa() {
             cpa
         })
         .reduce(
-            || Cpa::new(size, patch, guess_range, leakage_model),
+            || Cpa::new(size, batch, guess_range, leakage_model),
             |x, y| x + y,
         );
     cpa_parallel.finalize();
@@ -58,12 +58,12 @@ fn success() {
     let start_sample: usize = 0;
     let end_sample: usize = 5000;
     let size: usize = end_sample - start_sample; // Number of samples
-    let patch: usize = 500;
+    let batch: usize = 500;
     let guess_range = 256; // 2**(key length)
     let folder = String::from("../data/log_584012"); // "../../../intenship/scripts/log_584012"
     let nfiles = 13; // Number of files in the directory. TBD: Automating this value
     let rank_traces: usize = 1000;
-    let mut cpa = Cpa::new(size, patch, guess_range, leakage_model);
+    let mut cpa = Cpa::new(size, batch, guess_range, leakage_model);
     cpa.success_traces(rank_traces);
     for i in (0..nfiles).progress() {
         let dir_l = format!("{folder}/l/{i}.npy");
@@ -72,9 +72,9 @@ fn success() {
         let plaintext: Array2<FormatMetadata> =
             read_array_2_from_npy_file::<FormatMetadata>(&dir_p);
         let len_leakages = leakages.shape()[0];
-        for row in (0..len_leakages).step_by(patch) {
+        for row in (0..len_leakages).step_by(batch) {
             let range_samples = start_sample..end_sample;
-            let range_rows: std::ops::Range<usize> = row..row + patch;
+            let range_rows: std::ops::Range<usize> = row..row + batch;
             let range_metadat = 0..plaintext.shape()[1];
             let sample_traces = leakages
                 .slice(s![range_rows.clone(), range_samples])

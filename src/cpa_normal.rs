@@ -25,19 +25,19 @@ https://www.iacr.org/archive/ches2004/31560016/31560016.pdf */
 impl Cpa {
     pub fn new(
         size: usize,
-        patch: usize,
+        batch: usize,
         guess_range: i32,
         f: fn(ArrayView1<usize>, usize) -> usize,
     ) -> Self {
         Self {
             len_samples: size,
-            chunk: patch,
+            chunk: batch,
             guess_range,
             sum_leakages: Array1::zeros(size),
             sum2_leakages: Array1::zeros(size),
             sum_keys: Array1::zeros(guess_range as usize),
             sum2_keys: Array1::zeros(guess_range as usize),
-            values: Array2::zeros((patch, guess_range as usize)),
+            values: Array2::zeros((batch, guess_range as usize)),
             cov: Array2::zeros((guess_range as usize, size)),
             corr: Array2::zeros((guess_range as usize, size)),
             max_corr: Array2::zeros((guess_range as usize, 1)),
@@ -48,15 +48,15 @@ impl Cpa {
         }
     }
 
-    pub fn update<T: Copy, U: Copy>(&mut self, trace_patch: Array2<T>, plaintext_patch: Array2<U>)
+    pub fn update<T: Copy, U: Copy>(&mut self, trace_batch: Array2<T>, plaintext_batch: Array2<U>)
     where
         f32: From<T>,
         usize: From<U>,
     {
         /* This function updates the internal arrays of the CPA
-        It accepts trace_patch and plaintext_patch to update them*/
-        let tmp_traces = trace_patch.map(|t| f32::from(*t));
-        let metadat = plaintext_patch.map(|m| usize::from(*m));
+        It accepts trace_batch and plaintext_batch to update them*/
+        let tmp_traces = trace_batch.map(|t| f32::from(*t));
+        let metadat = plaintext_batch.map(|m| usize::from(*m));
         self.len_leakages += self.chunk;
         self.update_values(&metadat, &tmp_traces, self.guess_range);
         self.update_key_leakages(tmp_traces, self.guess_range);
@@ -98,14 +98,14 @@ impl Cpa {
 
     pub fn update_success<T: Copy, U: Copy>(
         &mut self,
-        trace_patch: Array2<T>,
-        plaintext_patch: Array2<U>,
+        trace_batch: Array2<T>,
+        plaintext_batch: Array2<U>,
     ) where
         f32: From<T>,
         usize: From<U>,
     {
         /* This function updates the main arrays of the CPA for the success rate*/
-        self.update(trace_patch, plaintext_patch);
+        self.update(trace_batch, plaintext_batch);
         if self.len_leakages % self.rank_traces == 0 {
             self.finalize();
             if self.len_leakages == self.rank_traces {
