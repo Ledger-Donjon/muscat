@@ -1,20 +1,22 @@
 //! Convenient utility functions.
 
-use std::{fs::File, io::BufWriter, time::Duration};
+use std::{io::Read, path::Path, time::Duration};
 
 use indicatif::{ProgressBar, ProgressStyle};
 use ndarray::{Array, Array1, Array2, ArrayView2};
-use ndarray_npy::{write_npy, ReadNpyExt, ReadableElement, WriteNpyExt};
+use ndarray_npy::{read_npy, write_npy, ReadNpyError, ReadableElement, WriteNpyError};
 use npyz::{Deserialize, NpyFile};
 
 /// Reads a [`NpyFile`] as a [`Array1`]
 ///
 /// This does the same as [`NpyFile.into_vec`] but faster, as this method reserves the resulting
-/// vector to the final size directly instead of relying on `collect`. It however panics in
-/// case of IO error.
-pub fn read_array_1_from_npy_file<T: Deserialize, R: std::io::Read>(npy: NpyFile<R>) -> Array1<T> {
+/// vector to the final size directly instead of relying on `collect`.
+///
+/// # Panics
+/// This function panics in case of IO error.
+pub fn read_array1_from_npy_file<T: Deserialize, R: Read>(npy: NpyFile<R>) -> Array1<T> {
     let mut v: Vec<T> = Vec::new();
-    v.reserve_exact(npy.shape()[0] as usize);
+    v.reserve_exact(npy.shape()[0].try_into().unwrap());
     v.extend(npy.data().unwrap().map(|x| x.unwrap()));
     Array::from_vec(v)
 }
@@ -30,11 +32,10 @@ pub fn save_array<
     S: ndarray::Data<Elem = T>,
     D: ndarray::Dimension,
 >(
-    path: &str,
+    path: impl AsRef<Path>,
     array: &ndarray::ArrayBase<S, D>,
-) {
-    // let dir = BufWriter::new(File::create(path).unwrap());
-    write_npy(path, array).unwrap();
+) -> Result<(), WriteNpyError> {
+    write_npy(path, array)
 }
 
 /// Creates a [`ProgressBar`] with a predefined default style.
@@ -46,13 +47,12 @@ pub fn progress_bar(len: usize) -> ProgressBar {
     progress_bar
 }
 
-pub fn read_array_2_from_npy_file<T: ReadableElement>(dir: &str) -> Array2<T> {
-    let reader: File = File::open(dir).unwrap();
-    let arr: Array2<T> = Array2::<T>::read_npy(reader).unwrap();
-    arr
+pub fn read_array2_from_npy_file<T: ReadableElement>(
+    path: impl AsRef<Path>,
+) -> Result<Array2<T>, ReadNpyError> {
+    read_npy(path)
 }
 
-pub fn save_array2(path: &str, ar: ArrayView2<f32>) {
-    let writer = BufWriter::new(File::create(path).unwrap());
-    ar.write_npy(writer).unwrap();
+pub fn save_array2(path: impl AsRef<Path>, array: ArrayView2<f32>) -> Result<(), WriteNpyError> {
+    write_npy(path, &array)
 }

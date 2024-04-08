@@ -4,12 +4,13 @@ use ndarray::Array1;
 use npyz::{Deserialize, NpyFile};
 use std::{
     fs::File,
-    io::{BufRead, BufReader, Lines, Seek, SeekFrom},
+    io::{self, BufRead, BufReader, Lines, Seek, SeekFrom},
     marker::PhantomData,
     path::Path,
 };
+use thiserror::Error;
 
-use crate::{trace::Trace, util::read_array_1_from_npy_file};
+use crate::{trace::Trace, util::read_array1_from_npy_file};
 
 /// Returns traces database directory from `TRACESDIR` environment variable, or `None` if it is not
 /// defined.
@@ -45,23 +46,14 @@ pub fn guess_leakages_size<T: Deserialize>(path: &str) -> usize {
 }
 
 /// Parsing records log can produce to types of errors, wrapped into this single error type.
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum LogError {
-    IoError(std::io::Error),
-    JsonError(serde_json::Error),
+    #[error("IO error")]
+    IoError(#[from] io::Error),
+    #[error("Failed to deserialize json")]
+    JsonError(#[from] serde_json::Error),
+    #[error("No records")]
     NoRecords,
-}
-
-impl From<std::io::Error> for LogError {
-    fn from(error: std::io::Error) -> Self {
-        Self::IoError(error)
-    }
-}
-
-impl From<serde_json::Error> for LogError {
-    fn from(error: serde_json::Error) -> Self {
-        Self::JsonError(error)
-    }
 }
 
 /// Opens a log file and allows iterating over the records.
@@ -178,7 +170,7 @@ impl<T: Deserialize> Record<T> {
             f.seek(SeekFrom::Start(toff)).unwrap();
             let buf = BufReader::new(f);
             let npy = NpyFile::new(buf).unwrap();
-            Ok(read_array_1_from_npy_file(npy))
+            Ok(read_array1_from_npy_file(npy))
         } else if let Some(_tid) = self.tid() {
             // Trace is stored in a single file
             todo!()
@@ -195,7 +187,7 @@ pub struct FileRecordIterator<T> {
 }
 
 impl<T> FileRecordIterator<T> {
-    pub fn new(path: &str) -> Result<Self, std::io::Error> {
+    pub fn new(path: &str) -> Result<Self, io::Error> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
         Ok(Self {
@@ -218,10 +210,10 @@ impl<T> Iterator for FileRecordIterator<T> {
                             data: value,
                             phantom: PhantomData,
                         })),
-                        Err(err) => Some(Err(LogError::JsonError(err))),
+                        Err(err) => Some(Err(err.into())),
                     }
                 }
-                Err(err) => Some(Err(LogError::IoError(err))),
+                Err(err) => Some(Err(err.into())),
             }
         } else {
             None
@@ -255,7 +247,7 @@ impl CachedLoader {
             let toff = record.toff();
             let chunk = &self.current_data.as_slice()[toff as usize..];
             let npy = NpyFile::new(chunk).unwrap();
-            Ok(read_array_1_from_npy_file(npy))
+            Ok(read_array1_from_npy_file(npy))
         } else {
             record.load_trace()
         }
@@ -415,5 +407,5 @@ impl<T: Deserialize, U> Iterator for BatchTraceIterator<T, U> {
 pub fn array_from_bytes<T: Deserialize>(bytes: &[u8], toff: usize) -> Array1<T> {
     let chunk = &bytes[toff..];
     let npy = NpyFile::new(chunk).unwrap();
-    read_array_1_from_npy_file(npy)
+    read_array1_from_npy_file(npy)
 }

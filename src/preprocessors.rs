@@ -69,12 +69,10 @@ impl CenteredProduct {
             .multi_cartesian_product(); //NOTE/TODO: maybe this can go in the struct parameters, which could improve performances
 
         for (idx, combination) in multi_prod.enumerate() {
-            println!("{:?}", combination);
             for i in combination {
                 centered_product_trace[idx] *= centered_trace[i as usize] as f64;
             }
         }
-        println! {"{:?}",centered_product_trace};
 
         centered_product_trace
     }

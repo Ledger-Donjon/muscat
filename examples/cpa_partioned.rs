@@ -1,11 +1,9 @@
-// use simple_bar::ProgressBar;
+use anyhow::Result;
 use indicatif::ProgressIterator;
 use muscat::cpa::*;
 use muscat::leakage::{hw, sbox};
-use muscat::util::{progress_bar, read_array_2_from_npy_file, save_array};
-use ndarray::*;
+use muscat::util::{progress_bar, read_array2_from_npy_file, save_array};
 use rayon::prelude::{ParallelBridge, ParallelIterator};
-use std::time::Instant;
 
 // traces format
 type FormatTraces = i16;
@@ -17,8 +15,8 @@ pub fn leakage_model(value: usize, guess: usize) -> usize {
 }
 
 // multi-threading cpa
-fn cpa() {
-    let size: usize = 5000; // Number of samples
+fn cpa() -> Result<()> {
+    let size = 5000; // Number of samples
     let guess_range = 256; // 2**(key length)
     let target_byte = 1;
     let folder = String::from("../../data"); // Directory of leakages and metadata
@@ -26,19 +24,17 @@ fn cpa() {
 
     /* Parallel operation using multi-threading on patches */
     let mut cpa = (0..nfiles)
-        .into_iter()
         .progress_with(progress_bar(nfiles))
         .map(|n| {
             let dir_l = format!("{folder}/l{n}.npy");
             let dir_p = format!("{folder}/p{n}.npy");
-            let leakages: Array2<FormatTraces> = read_array_2_from_npy_file(&dir_l);
-            let plaintext: Array2<FormatMetadata> = read_array_2_from_npy_file(&dir_p);
+            let leakages = read_array2_from_npy_file::<FormatTraces>(&dir_l).unwrap();
+            let plaintext = read_array2_from_npy_file::<FormatMetadata>(&dir_p).unwrap();
             (leakages, plaintext)
         })
-        .into_iter()
         .par_bridge()
         .map(|patch| {
-            let mut c: Cpa = Cpa::new(size, guess_range, target_byte, leakage_model);
+            let mut c = Cpa::new(size, guess_range, target_byte, leakage_model);
             let len_leakage = patch.0.shape()[0];
             for i in 0..len_leakage {
                 c.update(
@@ -52,12 +48,18 @@ fn cpa() {
             || Cpa::new(size, guess_range, target_byte, leakage_model),
             |a: Cpa, b| a + b,
         );
+
     cpa.finalize();
     println!("Guessed key = {}", cpa.pass_guess());
+
     // save corr key curves in npy
-    save_array("../results/corr.npy", &cpa.pass_corr_array());
+    save_array("../results/corr.npy", &cpa.pass_corr_array())?;
+
+    Ok(())
 }
 
-fn main() {
-    cpa();
+fn main() -> Result<()> {
+    cpa()?;
+
+    Ok(())
 }

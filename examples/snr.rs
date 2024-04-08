@@ -1,13 +1,14 @@
+use anyhow::Result;
 use indicatif::ProgressIterator;
 use muscat::processors::Snr;
 use muscat::quicklog::{BatchIter, Log};
 use muscat::util::{progress_bar, save_array};
 use rayon::prelude::{ParallelBridge, ParallelIterator};
 
-fn main() {
+fn main() -> Result<()> {
     // Open log file
     // This uses logs from the python quicklog library.
-    let log = Log::<i16>::new("log").unwrap();
+    let log = Log::<i16>::new("log")?;
     let leakage_size = log.leakage_size();
     let trace_count = log.len();
 
@@ -37,5 +38,7 @@ fn main() {
         .reduce(|| Snr::new(leakage_size, 256), |a, b| a + b);
 
     // Save the resulting SNR trace to a numpy file
-    save_array("result.npy", &result.snr());
+    save_array("result.npy", &result.snr())?;
+
+    Ok(())
 }

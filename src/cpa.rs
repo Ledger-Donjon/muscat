@@ -1,6 +1,52 @@
 use ndarray::{concatenate, s, Array1, Array2, ArrayView1, ArrayView2, Axis};
-use rayon::prelude::{IntoParallelIterator, ParallelIterator};
-use std::ops::Add;
+use rayon::{
+    iter::ParallelBridge,
+    prelude::{IntoParallelIterator, ParallelIterator},
+};
+use std::{iter::zip, ops::Add};
+
+/// Computes the [`Cpa`] of the given traces.
+///
+/// # Panics
+/// - Panic if `leakages.shape()[0] != plaintexts.shape()[0]`
+/// - Panic if `chunk_size` is 0.
+pub fn cpa(
+    leakages: &Array2<usize>,
+    plaintexts: &Array2<usize>,
+    guess_range: usize,
+    target_byte: usize,
+    leakage_func: fn(usize, usize) -> usize,
+    chunk_size: usize,
+) -> Cpa {
+    assert_eq!(leakages.shape()[0], plaintexts.shape()[0]);
+    assert!(chunk_size > 0);
+
+    let mut cpa = zip(
+        leakages.axis_chunks_iter(Axis(0), chunk_size),
+        plaintexts.axis_chunks_iter(Axis(0), chunk_size),
+    )
+    .par_bridge()
+    .map(|(leakages_chunk, plaintexts_chunk)| {
+        let mut cpa = Cpa::new(leakages.shape()[1], guess_range, target_byte, leakage_func);
+
+        for i in 0..leakages_chunk.shape()[0] {
+            cpa.update(
+                leakages_chunk.row(i).to_owned(),
+                plaintexts_chunk.row(i).to_owned(),
+            );
+        }
+
+        cpa
+    })
+    .reduce(
+        || Cpa::new(leakages.shape()[1], guess_range, target_byte, leakage_func),
+        |a: Cpa, b| a + b,
+    );
+
+    cpa.finalize();
+
+    cpa
+}
 
 pub struct Cpa {
     sum_leakages: Array1<usize>,
@@ -25,7 +71,7 @@ impl Cpa {
         size: usize,
         guess_range: usize,
         target_byte: usize,
-        f: fn(usize, usize) -> usize,
+        leakage_func: fn(usize, usize) -> usize,
     ) -> Self {
         Self {
             len_samples: size,
@@ -40,7 +86,7 @@ impl Cpa {
             corr: Array2::zeros((guess_range, size)),
             max_corr: Array2::zeros((guess_range, 1)),
             rank_slice: Array2::zeros((guess_range, 1)),
-            leakage_func: f,
+            leakage_func,
             len_leakages: 0,
         }
     }
