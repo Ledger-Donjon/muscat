@@ -23,7 +23,7 @@ impl<T: Clone> Dpa<T> {
     pub fn new(size: usize, guess_range: i32, f: fn(T, usize) -> usize) -> Self {
         Self {
             len_samples: size,
-            guess_range: guess_range,
+            guess_range,
             sum_0: Array2::zeros((guess_range as usize, size)),
             sum_1: Array2::zeros((guess_range as usize, size)),
             count_0: Array1::zeros(guess_range as usize),
