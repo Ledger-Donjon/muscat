@@ -72,7 +72,7 @@ impl Cpa {
     ) -> Self {
         Self {
             len_samples: size,
-            chunk: patch,
+            chunk: batch,
             guess_range,
             sum_leakages: Array1::zeros(size),
             sum2_leakages: Array1::zeros(size),
@@ -135,14 +135,14 @@ impl Cpa {
 
     pub fn update_success<T: Copy, U: Copy>(
         &mut self,
-        trace_patch: Array2<T>,
-        plaintext_patch: Array2<U>,
+        trace_batch: Array2<T>,
+        plaintext_batch: Array2<U>,
     ) where
         f32: From<T>,
         usize: From<U>,
     {
         /* This function updates the main arrays of the CPA for the success rate*/
-        self.update(trace_patch, plaintext_patch);
+        self.update(trace_batch, plaintext_batch);
         if self.len_leakages % self.rank_traces == 0 {
             self.finalize();
             if self.len_leakages == self.rank_traces {

@@ -34,8 +34,8 @@ fn cpa() -> Result<()> {
         .progress_with(progress_bar(len_traces))
         .par_bridge()
         .map(|row_number| {
-            let mut cpa = Cpa::new(size, patch, guess_range, leakage_model);
-            let range_rows = row_number..row_number + patch;
+            let mut cpa = Cpa::new(size, batch, guess_range, leakage_model);
+            let range_rows = row_number..row_number + batch;
             let range_samples = start_sample..end_sample;
             let sample_traces = leakages
                 .slice(s![range_rows.clone(), range_samples])
@@ -46,7 +46,7 @@ fn cpa() -> Result<()> {
             cpa
         })
         .reduce(
-            || Cpa::new(size, patch, guess_range, leakage_model),
+            || Cpa::new(size, batch, guess_range, leakage_model),
             |x, y| x + y,
         );
 
@@ -70,6 +70,7 @@ fn success() -> Result<()> {
     let rank_traces = 1000;
 
     let mut cpa = Cpa::new(size, patch, guess_range, leakage_model);
+
     cpa.success_traces(rank_traces);
     for i in (0..nfiles).progress() {
         let dir_l = format!("{folder}/l/{i}.npy");
@@ -77,9 +78,9 @@ fn success() -> Result<()> {
         let leakages = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
         let plaintext = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
         let len_leakages = leakages.shape()[0];
-        for row in (0..len_leakages).step_by(patch) {
+        for row in (0..len_leakages).step_by(batch) {
             let range_samples = start_sample..end_sample;
-            let range_rows: std::ops::Range<usize> = row..row + patch;
+            let range_rows: std::ops::Range<usize> = row..row + batch;
             let range_metadat = 0..plaintext.shape()[1];
             let sample_traces = leakages
                 .slice(s![range_rows.clone(), range_samples])
