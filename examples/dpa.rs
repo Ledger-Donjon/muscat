@@ -106,7 +106,6 @@ fn dpa_parallel() {
     // let corr = dpa.pass_corr_array();
 }
 
-
 fn main() {
     dpa();
 }
