@@ -1,5 +1,6 @@
 pub mod cpa;
 pub mod cpa_normal;
+pub mod dpa;
 pub mod leakage;
 pub mod preprocessors;
 pub mod processors;
