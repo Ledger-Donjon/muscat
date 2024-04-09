@@ -8,8 +8,8 @@ use std::{iter::zip, ops::Add};
 /// - Panic if `leakages.shape()[0] != plaintexts.shape()[0]`
 /// - Panic if `chunk_size` is 0.
 pub fn cpa<T, U>(
-    leakages: &Array2<T>,
-    plaintexts: &Array2<U>,
+    leakages: ArrayView2<T>,
+    plaintexts: ArrayView2<U>,
     guess_range: usize,
     leakage_func: fn(ArrayView1<usize>, usize) -> usize,
     chunk_size: usize,
@@ -28,7 +28,7 @@ where
     .par_bridge()
     .map(|(leakages_chunk, plaintexts_chunk)| {
         let mut cpa = Cpa::new(leakages.shape()[1], chunk_size, guess_range, leakage_func);
-        cpa.update(leakages_chunk.to_owned(), plaintexts_chunk.to_owned());
+        cpa.update(leakages_chunk, plaintexts_chunk);
         cpa
     })
     .reduce(
@@ -66,19 +66,19 @@ https://www.iacr.org/archive/ches2004/31560016/31560016.pdf */
 impl Cpa {
     pub fn new(
         size: usize,
-        patch: usize,
+        batch: usize,
         guess_range: usize,
         leakage_func: fn(ArrayView1<usize>, usize) -> usize,
     ) -> Self {
         Self {
             len_samples: size,
-            chunk: patch,
+            chunk: batch,
             guess_range,
             sum_leakages: Array1::zeros(size),
             sum2_leakages: Array1::zeros(size),
             sum_keys: Array1::zeros(guess_range),
             sum2_keys: Array1::zeros(guess_range),
-            values: Array2::zeros((patch, guess_range)),
+            values: Array2::zeros((batch, guess_range)),
             cov: Array2::zeros((guess_range, size)),
             corr: Array2::zeros((guess_range, size)),
             max_corr: Array2::zeros((guess_range, 1)),
@@ -89,38 +89,40 @@ impl Cpa {
         }
     }
 
-    pub fn update<T, U>(&mut self, trace_patch: Array2<T>, plaintext_patch: Array2<U>)
+    pub fn update<T, U>(&mut self, trace_batch: ArrayView2<T>, plaintext_batch: ArrayView2<U>)
     where
         T: Into<f32> + Copy,
         U: Into<usize> + Copy,
     {
         /* This function updates the internal arrays of the CPA
-        It accepts trace_patch and plaintext_patch to update them*/
-        let tmp_traces = trace_patch.map(|&t| t.into());
-        let metadat = plaintext_patch.map(|&m| m.into());
+        It accepts trace_batch and plaintext_batch to update them*/
+        let trace_batch = trace_batch.map(|&t| t.into());
+        let plaintext_batch = plaintext_batch.map(|&m| m.into());
+
+        self.update_values(plaintext_batch.view(), trace_batch.view(), self.guess_range);
+        self.update_key_leakages(trace_batch.view(), self.guess_range);
+
         self.len_leakages += self.chunk;
-        self.update_values(&metadat, &tmp_traces, self.guess_range);
-        self.update_key_leakages(tmp_traces, self.guess_range);
     }
 
     pub fn update_values(
         /* This function generates the values and cov arrays */
         &mut self,
-        metadata: &Array2<usize>,
-        trace: &Array2<f32>,
+        metadata: ArrayView2<usize>,
+        trace: ArrayView2<f32>,
         guess_range: usize,
     ) {
         for row in 0..self.chunk {
             for guess in 0..guess_range {
-                let pass_to_leakage: ArrayView1<usize> = metadata.row(row);
+                let pass_to_leakage = metadata.row(row);
                 self.values[[row, guess]] = (self.leakage_func)(pass_to_leakage, guess) as f32;
             }
         }
 
-        self.cov = self.cov.clone() + self.values.t().dot(trace);
+        self.cov = self.cov.clone() + self.values.t().dot(&trace);
     }
 
-    pub fn update_key_leakages(&mut self, trace: Array2<f32>, guess_range: usize) {
+    pub fn update_key_leakages(&mut self, trace: ArrayView2<f32>, guess_range: usize) {
         for i in 0..self.len_samples {
             self.sum_leakages[i] += trace.column(i).sum(); // trace[i] as usize;
             self.sum2_leakages[i] += trace.column(i).dot(&trace.column(i)); // (trace[i] * trace[i]) as usize;
@@ -133,13 +135,13 @@ impl Cpa {
         }
     }
 
-    pub fn update_success<T: Copy, U: Copy>(
+    pub fn update_success<T, U>(
         &mut self,
-        trace_batch: Array2<T>,
-        plaintext_batch: Array2<U>,
+        trace_batch: ArrayView2<T>,
+        plaintext_batch: ArrayView2<U>,
     ) where
-        f32: From<T>,
-        usize: From<U>,
+        T: Into<f32> + Copy,
+        U: Into<usize> + Copy,
     {
         /* This function updates the main arrays of the CPA for the success rate*/
         self.update(trace_batch, plaintext_batch);
@@ -204,8 +206,8 @@ impl Cpa {
         self.rank_slice.view()
     }
 
-    pub fn pass_corr_array(&self) -> Array2<f32> {
-        self.corr.clone()
+    pub fn pass_corr_array(&self) -> ArrayView2<f32> {
+        self.corr.view()
     }
 
     pub fn pass_guess(&self) -> usize {
@@ -223,6 +225,7 @@ impl Cpa {
 
 impl Add for Cpa {
     type Output = Self;
+
     fn add(self, rhs: Self) -> Self::Output {
         Self {
             sum_leakages: self.sum_leakages + rhs.sum_leakages,

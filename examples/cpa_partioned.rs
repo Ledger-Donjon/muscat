@@ -22,7 +22,7 @@ fn cpa() -> Result<()> {
     let folder = String::from("../../data"); // Directory of leakages and metadata
     let nfiles = 5; // Number of files in the directory. TBD: Automating this value
 
-    /* Parallel operation using multi-threading on patches */
+    /* Parallel operation using multi-threading on batches */
     let mut cpa = (0..nfiles)
         .progress_with(progress_bar(nfiles))
         .map(|n| {
@@ -33,13 +33,13 @@ fn cpa() -> Result<()> {
             (leakages, plaintext)
         })
         .par_bridge()
-        .map(|patch| {
+        .map(|batch| {
             let mut c = Cpa::new(size, guess_range, target_byte, leakage_model);
-            let len_leakage = patch.0.shape()[0];
+            let len_leakage = batch.0.shape()[0];
             for i in 0..len_leakage {
                 c.update(
-                    patch.0.row(i).map(|x| *x as usize),
-                    patch.1.row(i).map(|y| *y as usize),
+                    batch.0.row(i).map(|x| *x as usize).view(),
+                    batch.1.row(i).map(|y| *y as usize).view(),
                 );
             }
             c

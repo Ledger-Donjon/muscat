@@ -1,5 +1,5 @@
 //! Traces processing algorithms, such as T-Test, SNR, etc.
-use ndarray::{s, Array1, Array2, ArrayView1, Axis};
+use ndarray::{s, Array1, Array2, ArrayView1, ArrayView2, Axis};
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use std::{iter::zip, ops::Add};
 
@@ -32,7 +32,7 @@ impl MeanVar {
     ///
     /// # Panics
     /// Panics in debug if the length of the trace is different form the size of [`MeanVar`].
-    pub fn process<T: Into<i64> + Copy>(&mut self, trace: &ArrayView1<T>) {
+    pub fn process<T: Into<i64> + Copy>(&mut self, trace: ArrayView1<T>) {
         debug_assert!(trace.len() == self.sum.len());
 
         for i in 0..self.sum.len() {
@@ -86,7 +86,7 @@ impl Add for MeanVar {
 /// # Panics
 /// Panic if `chunk_size` is 0.
 pub fn compute_snr<T, F>(
-    leakages: &Array2<T>,
+    leakages: ArrayView2<T>,
     classes: usize,
     get_class: F,
     chunk_size: usize,
@@ -105,7 +105,7 @@ where
             let mut snr = Snr::new(leakages.shape()[1], classes);
 
             for i in 0..leakages_chunk.shape()[0] {
-                snr.process(&leakages_chunk.row(i), get_class(chunk_idx + i));
+                snr.process(leakages_chunk.row(i), get_class(chunk_idx + i));
             }
 
             snr
@@ -143,7 +143,7 @@ impl Snr {
     ///
     /// # Panics
     /// Panics in debug if the length of the trace is different from the size of [`Snr`].
-    pub fn process<T: Into<i64> + Copy>(&mut self, trace: &ArrayView1<T>, class: usize) {
+    pub fn process<T: Into<i64> + Copy>(&mut self, trace: ArrayView1<T>, class: usize) {
         debug_assert!(trace.len() == self.classes_sum.shape()[1]);
 
         self.mean_var.process(trace);
@@ -221,7 +221,7 @@ impl TTest {
     ///
     /// # Panics
     /// Panics in debug if `trace.len() != self.mean_var_1.sum.len()`.
-    pub fn process<T: Into<i64> + Copy>(&mut self, trace: &ArrayView1<T>, class: bool) {
+    pub fn process<T: Into<i64> + Copy>(&mut self, trace: ArrayView1<T>, class: bool) {
         debug_assert!(trace.len() == self.mean_var_1.sum.len());
 
         if class {
@@ -264,15 +264,15 @@ mod tests {
     #[test]
     fn test_mean_var() {
         let mut processor = MeanVar::new(4);
-        processor.process(&array![28038i16, 22066i16, -20614i16, -9763i16].view());
+        processor.process(array![28038i16, 22066i16, -20614i16, -9763i16].view());
         assert_eq!(
             processor.mean(),
             array![28038f64, 22066f64, -20614f64, -9763f64]
         );
         assert_eq!(processor.var(), array![0f64, 0f64, 0f64, 0f64]);
-        processor.process(&array![31377, -6950, -15666, 26773].view());
-        processor.process(&array![24737, -18311, 24742, 17207].view());
-        processor.process(&array![12974, -29255, -28798, 18988].view());
+        processor.process(array![31377, -6950, -15666, 26773].view());
+        processor.process(array![24737, -18311, 24742, 17207].view());
+        processor.process(array![12974, -29255, -28798, 18988].view());
         assert_eq!(
             processor.mean(),
             array![24281.5f64, -8112.5f64, -10084f64, 13301.25f64]
@@ -299,7 +299,7 @@ mod tests {
             array![93, 191, 49, 26],
         ];
         for (i, trace) in traces.iter().enumerate() {
-            processor.process(&trace.view(), i % 3 == 0);
+            processor.process(trace.view(), i % 3 == 0);
         }
         assert_eq!(
             processor.ttest(),

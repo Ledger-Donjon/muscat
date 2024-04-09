@@ -1,4 +1,4 @@
-use ndarray::{concatenate, Array1, Array2, ArrayView2, Axis};
+use ndarray::{concatenate, Array1, Array2, ArrayView1, ArrayView2, Axis};
 use std::ops::Add;
 pub struct Dpa<T> {
     /* List of internal class variables */
@@ -39,20 +39,20 @@ impl<T: Clone> Dpa<T> {
     }
 
     //
-    pub fn update<U: Clone>(&mut self, trace: Array1<U>, metadata: T)
+    pub fn update<U>(&mut self, trace: ArrayView1<U>, metadata: T)
     where
-        f32: From<U>,
+        U: Into<f32> + Copy,
     {
         /* This function updates the internal arrays of the DPA
-        It accepts trace_patch and plaintext_patch to update them*/
+        It accepts trace_batch and plaintext_batch to update them*/
         for guess in 0..self.guess_range as i16 {
-            let index: usize = (self.leakage_func)(metadata.clone(), guess as usize);
+            let index = (self.leakage_func)(metadata.clone(), guess as usize);
             if index & 1 == 1 {
                 // classification is performed based on the lsb
                 // let tmp_row: Array1<f32> = self.sum_1.row(guess as usize).to_owned() + tmp_trace.clone();
                 // self.sum_1.row_mut(guess as usize).assign(&tmp_row);
                 for i in 0..self.len_samples {
-                    self.sum_1[[guess as usize, i]] += f32::from(trace[i].clone());
+                    self.sum_1[[guess as usize, i]] += trace[i].into();
                 }
                 self.count_1[guess as usize] += 1;
             } else {
@@ -60,7 +60,7 @@ impl<T: Clone> Dpa<T> {
                 // self.sum_0.row_mut(guess as usize).assign(&tmp_row);
 
                 for i in 0..self.len_samples {
-                    self.sum_0[[guess as usize, i]] += f32::from(trace[i].clone());
+                    self.sum_0[[guess as usize, i]] += trace[i].into();
                 }
                 self.count_0[guess as usize] += 1;
             }
@@ -68,12 +68,12 @@ impl<T: Clone> Dpa<T> {
         self.len_leakages += 1;
     }
 
-    pub fn update_success<U: Clone>(&mut self, trace_patch: Array1<U>, plaintext_patch: T)
+    pub fn update_success<U>(&mut self, trace_batch: ArrayView1<U>, plaintext_batch: T)
     where
-        f32: From<U>,
+        U: Into<f32> + Copy,
     {
         /* This function updates the main arrays of the DPA for the success rate*/
-        self.update(trace_patch, plaintext_patch);
+        self.update(trace_batch, plaintext_batch);
 
         if self.len_leakages % self.rank_traces == 0 {
             self.finalize();
@@ -92,14 +92,12 @@ impl<T: Clone> Dpa<T> {
     pub fn finalize(&mut self) {
         /* This function finalizes the calculation after
         feeding all stored acc arrays */
-        let mut tmp_avg_0: Array2<f32> =
-            Array2::zeros((self.guess_range as usize, self.len_samples));
-        let mut tmp_avg_1: Array2<f32> =
-            Array2::zeros((self.guess_range as usize, self.len_samples));
+        let mut tmp_avg_0 = Array2::zeros((self.guess_range as usize, self.len_samples));
+        let mut tmp_avg_1 = Array2::zeros((self.guess_range as usize, self.len_samples));
 
         for row in 0..self.guess_range as usize {
-            let tmp_row_0: Array1<f32> = self.sum_0.row(row).to_owned() / self.count_0[row] as f32;
-            let tmp_row_1: Array1<f32> = self.sum_1.row(row).to_owned() / self.count_1[row] as f32;
+            let tmp_row_0 = self.sum_0.row(row).to_owned() / self.count_0[row] as f32;
+            let tmp_row_1 = self.sum_1.row(row).to_owned() / self.count_1[row] as f32;
             tmp_avg_0.row_mut(row).assign(&tmp_row_0);
             tmp_avg_1.row_mut(row).assign(&tmp_row_1);
         }
@@ -135,8 +133,8 @@ impl<T: Clone> Dpa<T> {
         self.rank_slice.view()
     }
 
-    pub fn pass_corr_array(&self) -> Array2<f32> {
-        self.corr.clone()
+    pub fn pass_corr_array(&self) -> ArrayView2<f32> {
+        self.corr.view()
     }
 
     pub fn pass_guess(&self) -> i32 {
@@ -154,6 +152,7 @@ impl<T: Clone> Dpa<T> {
 
 impl<T> Add for Dpa<T> {
     type Output = Self;
+
     fn add(self, rhs: Self) -> Self::Output {
         Self {
             sum_0: self.sum_0 + rhs.sum_0,

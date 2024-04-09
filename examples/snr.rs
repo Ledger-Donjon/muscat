@@ -29,7 +29,7 @@ fn main() -> Result<()> {
                 for trace in batch {
                     // `process` takes an `ArrayView1` argument, which makes possible to pass a
                     // trace slice: `traces.leakage.slice(s![100..])` for instance.
-                    snr.process(&trace.leakage.view(), trace.value as usize)
+                    snr.process(trace.leakage.view(), trace.value as usize)
                 }
                 snr
             },

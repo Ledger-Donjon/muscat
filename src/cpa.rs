@@ -11,8 +11,8 @@ use std::{iter::zip, ops::Add};
 /// - Panic if `leakages.shape()[0] != plaintexts.shape()[0]`
 /// - Panic if `chunk_size` is 0.
 pub fn cpa(
-    leakages: &Array2<usize>,
-    plaintexts: &Array2<usize>,
+    leakages: ArrayView2<usize>,
+    plaintexts: ArrayView2<usize>,
     guess_range: usize,
     target_byte: usize,
     leakage_func: fn(usize, usize) -> usize,
@@ -30,10 +30,7 @@ pub fn cpa(
         let mut cpa = Cpa::new(leakages.shape()[1], guess_range, target_byte, leakage_func);
 
         for i in 0..leakages_chunk.shape()[0] {
-            cpa.update(
-                leakages_chunk.row(i).to_owned(),
-                plaintexts_chunk.row(i).to_owned(),
-            );
+            cpa.update(leakages_chunk.row(i), plaintexts_chunk.row(i));
         }
 
         cpa
@@ -91,21 +88,31 @@ impl Cpa {
         }
     }
 
-    pub fn update(&mut self, trace: Array1<usize>, plaintext: Array1<usize>) {
+    pub fn update(&mut self, trace: ArrayView1<usize>, plaintext: ArrayView1<usize>) {
         /* This function updates the main arrays of the CPA, as shown in Alg. 4
         in the paper.*/
         self.len_leakages += 1;
-        self.gen_values(plaintext.clone(), self.guess_range, self.target_byte);
-        self.go(trace, plaintext.clone(), self.guess_range);
+        self.gen_values(plaintext, self.guess_range, self.target_byte);
+        self.go(trace, plaintext, self.guess_range);
     }
 
-    pub fn gen_values(&mut self, metadata: Array1<usize>, guess_range: usize, target_key: usize) {
+    pub fn gen_values(
+        &mut self,
+        metadata: ArrayView1<usize>,
+        guess_range: usize,
+        target_key: usize,
+    ) {
         for guess in 0..guess_range {
             self.values[guess] = (self.leakage_func)(metadata[target_key], guess);
         }
     }
 
-    pub fn go(&mut self, trace: Array1<usize>, metadata: Array1<usize>, guess_range: usize) {
+    pub fn go(
+        &mut self,
+        trace: ArrayView1<usize>,
+        metadata: ArrayView1<usize>,
+        guess_range: usize,
+    ) {
         for i in 0..self.len_samples {
             self.sum_leakages[i] += trace[i];
             self.sig_leakages[i] += trace[i] * trace[i];
@@ -126,8 +133,7 @@ impl Cpa {
         overall traces */
 
         let shape_p = self.guess_range;
-        let mut p: ndarray::ArrayBase<ndarray::OwnedRepr<usize>, ndarray::Dim<[usize; 2]>> =
-            Array2::zeros((shape_p, shape_p));
+        let mut p = Array2::zeros((shape_p, shape_p));
         for i in 0..self.guess_range {
             for x in 0..self.guess_range {
                 p[[x, i]] = (self.leakage_func)(x, i);
@@ -136,7 +142,7 @@ impl Cpa {
         for i in 0..self.guess_range {
             let _sigkeys = self.sig_keys[i] as f32 / self.len_leakages as f32;
             let _sumkeys = self.sum_keys[i] as f32 / self.len_leakages as f32;
-            let lower1: f32 = _sigkeys - (_sumkeys * _sumkeys);
+            let lower1 = _sigkeys - (_sumkeys * _sumkeys);
 
             /* Parallel operation using multi-threading */
             let tmp: Vec<f32> = (0..self.len_samples)
@@ -187,8 +193,8 @@ impl Cpa {
         self.rank_slice.slice(s![.., 1..])
     }
 
-    pub fn pass_corr_array(&self) -> Array2<f32> {
-        self.corr.clone()
+    pub fn pass_corr_array(&self) -> ArrayView2<f32> {
+        self.corr.view()
     }
 
     pub fn pass_guess(&self) -> usize {

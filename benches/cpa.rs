@@ -17,8 +17,8 @@ fn cpa_sequential(leakages: &Array2<f64>, plaintexts: &Array2<u8>) -> Cpa {
 
     for i in 0..leakages.shape()[0] {
         cpa.update(
-            leakages.row(i).map(|&x| x as usize),
-            plaintexts.row(i).map(|&y| y as usize),
+            leakages.row(i).map(|&x| x as usize).view(),
+            plaintexts.row(i).map(|&y| y as usize).view(),
         );
     }
 
@@ -40,10 +40,7 @@ fn cpa_normal_sequential(leakages: &Array2<f64>, plaintexts: &Array2<u8>) -> cpa
         leakages.axis_chunks_iter(Axis(0), chunk_size),
         plaintexts.axis_chunks_iter(Axis(0), chunk_size),
     ) {
-        cpa.update(
-            leakages_chunk.map(|&x| x as f32),
-            plaintexts_chunk.to_owned(),
-        );
+        cpa.update(leakages_chunk.map(|&x| x as f32).view(), plaintexts_chunk);
     }
 
     cpa.finalize();
@@ -78,8 +75,8 @@ fn bench_cpa(c: &mut Criterion) {
             |b, (leakages, plaintexts)| {
                 b.iter(|| {
                     cpa::cpa(
-                        &leakages.map(|&x| x as usize),
-                        &plaintexts.map(|&x| x as usize),
+                        leakages.map(|&x| x as usize).view(),
+                        plaintexts.map(|&x| x as usize).view(),
                         256,
                         0,
                         leakage_model,
@@ -102,8 +99,8 @@ fn bench_cpa(c: &mut Criterion) {
             |b, (leakages, plaintexts)| {
                 b.iter(|| {
                     cpa_normal::cpa(
-                        &leakages.map(|&x| x as f32),
-                        plaintexts,
+                        leakages.map(|&x| x as f32).view(),
+                        plaintexts.view(),
                         256,
                         leakage_model_normal,
                         500,
