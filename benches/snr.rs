@@ -9,14 +9,14 @@ fn snr_sequential(leakages: &Array2<i64>, plaintexts: &Array2<u8>) -> Array1<f64
     let mut snr = Snr::new(leakages.shape()[1], 256);
 
     for i in 0..leakages.shape()[0] {
-        snr.process(&leakages.row(i), plaintexts.row(i)[0] as usize);
+        snr.process(leakages.row(i), plaintexts.row(i)[0] as usize);
     }
 
     snr.snr()
 }
 
 fn snr_parallel(leakages: &Array2<i64>, plaintexts: &Array2<u8>) -> Array1<f64> {
-    compute_snr(leakages, 256, |i| plaintexts.row(i)[0].into(), 500)
+    compute_snr(leakages.view(), 256, |i| plaintexts.row(i)[0].into(), 500)
 }
 
 fn bench_snr(c: &mut Criterion) {

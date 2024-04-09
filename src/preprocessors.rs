@@ -37,7 +37,7 @@ impl CenteredProduct {
     }
 
     /// Processes an input trace to update internal accumulators.
-    pub fn process<T: Into<i64> + Copy>(&mut self, trace: &ArrayView1<T>) {
+    pub fn process<T: Into<i64> + Copy>(&mut self, trace: ArrayView1<T>) {
         let size = self.acc.len();
         for i in 0..size {
             let x = trace[i].into();
@@ -56,7 +56,7 @@ impl CenteredProduct {
 
     /// Apply the processing to an input trace
     /// The centered product substract the mean of the traces and then perform products between every input time samples
-    pub fn apply<T: Into<f64> + Copy>(&mut self, trace: &ArrayView1<T>) -> Array1<f64> {
+    pub fn apply<T: Into<f64> + Copy>(&mut self, trace: ArrayView1<T>) -> Array1<f64> {
         // First we substract the mean trace
         let centered_trace: Array1<f64> = trace.mapv(|x| x.into()) - &self.mean;
         let length_out_trace: usize = self.intervals.iter().map(|x| x.len()).product();
@@ -96,7 +96,7 @@ impl Power {
     }
 
     /// Processes an input trace
-    pub fn process<T: Into<i64> + Copy>(&self, trace: &ArrayView1<T>) -> Array1<f64> {
+    pub fn process<T: Into<i64> + Copy>(&self, trace: ArrayView1<T>) -> Array1<f64> {
         // Concatenate the slices specified by the ranges
         let result: Array1<_> = self
             .intervals
@@ -129,7 +129,7 @@ impl StandardScaler {
     }
 
     /// Processes an input trace to update internal accumulators.
-    pub fn process<T: Into<i64> + Copy>(&mut self, trace: &ArrayView1<T>) {
+    pub fn process<T: Into<i64> + Copy>(&mut self, trace: ArrayView1<T>) {
         self.meanvar.process(trace);
     }
 
@@ -140,7 +140,7 @@ impl StandardScaler {
     }
 
     /// Apply the processing to an input trace
-    pub fn apply<T: Into<f64> + Copy>(&mut self, trace: &ArrayView1<T>) -> Array1<f64> {
+    pub fn apply<T: Into<f64> + Copy>(&mut self, trace: ArrayView1<T>) -> Array1<f64> {
         (trace.mapv(|x| x.into()) - &self.mean) / &self.std
     }
 }
@@ -160,10 +160,10 @@ mod tests {
     #[test]
     fn test_centered_product() {
         let mut processor = CenteredProduct::new(5, vec![0..2, 3..5]);
-        processor.process(&array![0i16, 1i16, 2i16, -3i16, -4i16].view());
+        processor.process(array![0i16, 1i16, 2i16, -3i16, -4i16].view());
         processor.finalize();
         assert_eq!(
-            processor.apply(&array![0i16, 1i16, 2i16, -3i16, -4i16].view()),
+            processor.apply(array![0i16, 1i16, 2i16, -3i16, -4i16].view()),
             array![0f64, 0f64, 0f64, 0f64]
         );
         let traces = [
@@ -181,7 +181,7 @@ mod tests {
 
         let mut processor2 = CenteredProduct::new(4, vec![0..1, 1..2, 2..4]);
         for t in traces.iter() {
-            processor2.process(&t.view());
+            processor2.process(t.view());
         }
         processor2.finalize();
 
@@ -200,7 +200,7 @@ mod tests {
 
         for (i, t) in traces.iter().enumerate() {
             assert_eq!(
-                processor2.apply(&t.view()).map(|x| round_to_2_digits(*x)),
+                processor2.apply(t.view()).map(|x| round_to_2_digits(*x)),
                 expected_results[i]
             );
         }
@@ -228,15 +228,15 @@ mod tests {
         ];
 
         assert_eq!(
-            processor1.process(&t.view()).map(|x| round_to_2_digits(*x)),
+            processor1.process(t.view()).map(|x| round_to_2_digits(*x)),
             expected_results[0]
         );
         assert_eq!(
-            processor2.process(&t.view()).map(|x| round_to_2_digits(*x)),
+            processor2.process(t.view()).map(|x| round_to_2_digits(*x)),
             expected_results[1]
         );
         assert_eq!(
-            processor3.process(&t.view()).map(|x| round_to_2_digits(*x)),
+            processor3.process(t.view()).map(|x| round_to_2_digits(*x)),
             expected_results[2]
         );
     }
@@ -258,7 +258,7 @@ mod tests {
 
         let mut processor = StandardScaler::new(4);
         for t in traces.iter() {
-            processor.process(&t.view());
+            processor.process(t.view());
         }
         processor.finalize();
 
@@ -277,7 +277,7 @@ mod tests {
 
         for (i, t) in traces.iter().enumerate() {
             assert_eq!(
-                processor.apply(&t.view()).map(|x| round_to_2_digits(*x)),
+                processor.apply(t.view()).map(|x| round_to_2_digits(*x)),
                 expected_results[i]
             );
         }

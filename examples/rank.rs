@@ -41,8 +41,8 @@ fn rank() -> Result<()> {
                     || Cpa::new(size, guess_range, target_byte, leakage_model),
                     |mut r: Cpa, n| {
                         r.update(
-                            l_sample.row(n).map(|l: &FormatTraces| *l as usize),
-                            p_sample.row(n).map(|p: &FormatMetadata| *p as usize),
+                            l_sample.row(n).map(|l| *l as usize).view(),
+                            p_sample.row(n).map(|p| *p as usize).view(),
                         );
                         r
                     },

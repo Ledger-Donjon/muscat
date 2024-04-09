@@ -16,9 +16,9 @@ pub fn leakage_model(value: Array1<FormatMetadata>, guess: usize) -> usize {
 }
 
 fn dpa() -> Result<()> {
-    let start_sample: usize = 0;
-    let end_sample: usize = 2000;
-    let size: usize = end_sample - start_sample; // Number of samples
+    let start_sample = 0;
+    let end_sample = 2000;
+    let size = end_sample - start_sample; // Number of samples
     let guess_range = 256; // 2**(key length)
     let folder = String::from("../../data/cw");
     let dir_l = format!("{folder}/leakages.npy");
@@ -32,8 +32,8 @@ fn dpa() -> Result<()> {
             .row(i)
             .slice(s![start_sample..end_sample])
             .map(|t| *t as f32);
-        let tmp_metadata = plaintext.row(i).to_owned();
-        dpa.update(tmp_trace, tmp_metadata);
+        let tmp_metadata = plaintext.row(i);
+        dpa.update(tmp_trace.view(), tmp_metadata.to_owned());
     }
     dpa.finalize();
     println!("Guessed key = {:02x}", dpa.pass_guess());
@@ -44,9 +44,9 @@ fn dpa() -> Result<()> {
 
 #[allow(dead_code)]
 fn dpa_success() -> Result<()> {
-    let start_sample: usize = 0;
-    let end_sample: usize = 2000;
-    let size: usize = end_sample - start_sample; // Number of samples
+    let start_sample = 0;
+    let end_sample = 2000;
+    let size = end_sample - start_sample; // Number of samples
     let guess_range = 256; // 2**(key length)
     let folder = String::from("../../data/cw");
     let dir_l = format!("{folder}/leakages.npy");
@@ -64,7 +64,7 @@ fn dpa_success() -> Result<()> {
             .slice(s![start_sample..end_sample])
             .map(|t| *t as f32);
         let tmp_metadata = plaintext.row(i).to_owned();
-        dpa.update_success(tmp_trace, tmp_metadata);
+        dpa.update_success(tmp_trace.view(), tmp_metadata);
     }
 
     println!("Guessed key = {:02x}", dpa.pass_guess());
@@ -75,9 +75,9 @@ fn dpa_success() -> Result<()> {
 
 #[allow(dead_code)]
 fn dpa_parallel() -> Result<()> {
-    let start_sample: usize = 0;
-    let end_sample: usize = 2000;
-    let size: usize = end_sample - start_sample; // Number of samples
+    let start_sample = 0;
+    let end_sample = 2000;
+    let size = end_sample - start_sample; // Number of samples
     let guess_range = 256; // 2**(key length)
     let folder = String::from("../../data/cw");
     let dir_l = format!("{folder}/leakages.npy");
@@ -85,20 +85,20 @@ fn dpa_parallel() -> Result<()> {
     let leakages: Array2<FormatTraces> = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
     let plaintext: Array2<FormatMetadata> = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
     let len_traces = 20000; //leakages.shape()[0];
-    let patch: usize = 2500;
+    let batch = 2500;
     let mut dpa = (0..len_traces)
-        .step_by(patch)
+        .step_by(batch)
         .par_bridge()
         .map(|range_rows: usize| {
             let tmp_leakages = leakages
-                .slice(s![range_rows..range_rows + patch, start_sample..end_sample])
+                .slice(s![range_rows..range_rows + batch, start_sample..end_sample])
                 .map(|l| *l as f32);
             let tmp_metadata = plaintext
-                .slice(s![range_rows..range_rows + patch, ..])
+                .slice(s![range_rows..range_rows + batch, ..])
                 .to_owned();
             let mut dpa_inner = Dpa::new(size, guess_range, leakage_model);
-            for i in 0..patch {
-                let trace = tmp_leakages.row(i).to_owned();
+            for i in 0..batch {
+                let trace = tmp_leakages.row(i);
                 let metadata = tmp_metadata.row(i).to_owned();
                 dpa_inner.update(trace, metadata);
             }
