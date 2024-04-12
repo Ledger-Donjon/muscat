@@ -10,14 +10,17 @@ use std::{iter::zip, ops::Add};
 /// # Panics
 /// - Panic if `leakages.shape()[0] != plaintexts.shape()[0]`
 /// - Panic if `chunk_size` is 0.
-pub fn cpa(
-    leakages: ArrayView2<usize>,
-    plaintexts: ArrayView2<usize>,
+pub fn cpa<T>(
+    leakages: ArrayView2<T>,
+    plaintexts: ArrayView2<T>,
     guess_range: usize,
     target_byte: usize,
     leakage_func: fn(usize, usize) -> usize,
     chunk_size: usize,
-) -> Cpa {
+) -> Cpa
+where
+    T: Into<usize> + Copy + Sync,
+{
     assert_eq!(leakages.shape()[0], plaintexts.shape()[0]);
     assert!(chunk_size > 0);
 
@@ -94,26 +97,29 @@ impl Cpa {
 
     /// # Panics
     /// Panic in debug if `trace.shape()[0] != self.len_samples`.
-    pub fn update(&mut self, trace: ArrayView1<usize>, plaintext: ArrayView1<usize>) {
+    pub fn update<T>(&mut self, trace: ArrayView1<T>, plaintext: ArrayView1<T>)
+    where
+        T: Into<usize> + Copy,
+    {
         debug_assert_eq!(trace.shape()[0], self.len_samples);
 
         /* This function updates the main arrays of the CPA, as shown in Alg. 4
         in the paper.*/
 
         for i in 0..self.len_samples {
-            self.sum_leakages[i] += trace[i];
-            self.sum_squares_leakages[i] += trace[i] * trace[i];
+            self.sum_leakages[i] += trace[i].into();
+            self.sum_squares_leakages[i] += trace[i].into() * trace[i].into();
         }
 
         for guess in 0..self.guess_range {
-            let value = (self.leakage_func)(plaintext[self.target_byte], guess);
+            let value = (self.leakage_func)(plaintext[self.target_byte].into(), guess);
             self.guess_sum_leakages[guess] += value;
             self.guess_sum_squares_leakages[guess] += value * value;
         }
 
-        let partition = plaintext[self.target_byte];
+        let partition = plaintext[self.target_byte].into();
         for i in 0..self.len_samples {
-            self.a_l[[partition, i]] += trace[i];
+            self.a_l[[partition, i]] += trace[i].into();
         }
 
         self.len_leakages += 1;
