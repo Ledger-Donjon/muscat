@@ -112,7 +112,7 @@ impl<T: Clone> Dpa<T> {
         self.select_max();
     }
 
-    pub fn select_max(&mut self) {
+    fn select_max(&mut self) {
         for i in 0..self.guess_range {
             let row = self.corr.row(i as usize);
             // Calculating the max value in the row

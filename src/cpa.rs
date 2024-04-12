@@ -100,23 +100,13 @@ impl Cpa {
         self.go(trace, plaintext, self.guess_range);
     }
 
-    pub fn gen_values(
-        &mut self,
-        metadata: ArrayView1<usize>,
-        guess_range: usize,
-        target_key: usize,
-    ) {
+    fn gen_values(&mut self, metadata: ArrayView1<usize>, guess_range: usize, target_key: usize) {
         for guess in 0..guess_range {
             self.values[guess] = (self.leakage_func)(metadata[target_key], guess);
         }
     }
 
-    pub fn go(
-        &mut self,
-        trace: ArrayView1<usize>,
-        metadata: ArrayView1<usize>,
-        guess_range: usize,
-    ) {
+    fn go(&mut self, trace: ArrayView1<usize>, metadata: ArrayView1<usize>, guess_range: usize) {
         for i in 0..self.len_samples {
             self.sum_leakages[i] += trace[i];
             self.sig_leakages[i] += trace[i] * trace[i];
@@ -173,7 +163,7 @@ impl Cpa {
         self.calculation();
     }
 
-    pub fn calculation(&mut self) {
+    fn calculation(&mut self) {
         // let mut max_256: Array2<f32> = Array2::zeros((self.guess_range as usize, 1));
         for i in 0..self.guess_range {
             let row = self.corr.row(i);

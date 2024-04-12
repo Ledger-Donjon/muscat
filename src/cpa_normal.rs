@@ -111,7 +111,7 @@ impl Cpa {
         self.len_leakages += self.chunk;
     }
 
-    pub fn update_values(
+    fn update_values(
         /* This function generates the values and cov arrays */
         &mut self,
         trace: ArrayView2<f32>,
@@ -128,7 +128,7 @@ impl Cpa {
         self.cov = self.cov.clone() + self.values.t().dot(&trace);
     }
 
-    pub fn update_key_leakages(&mut self, trace: ArrayView2<f32>, guess_range: usize) {
+    fn update_key_leakages(&mut self, trace: ArrayView2<f32>, guess_range: usize) {
         for i in 0..self.len_samples {
             self.sum_leakages[i] += trace.column(i).sum(); // trace[i] as usize;
             self.sum2_leakages[i] += trace.column(i).dot(&trace.column(i)); // (trace[i] * trace[i]) as usize;
@@ -186,7 +186,7 @@ impl Cpa {
         self.select_max();
     }
 
-    pub fn select_max(&mut self) {
+    fn select_max(&mut self) {
         for i in 0..self.guess_range {
             let row = self.corr.row(i);
             // Calculating the max value in the row
