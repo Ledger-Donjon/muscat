@@ -88,7 +88,11 @@ impl Cpa {
         }
     }
 
+    /// # Panics
+    /// Panic in debug if `trace.shape()[0] != self.len_samples`.
     pub fn update(&mut self, trace: ArrayView1<usize>, plaintext: ArrayView1<usize>) {
+        debug_assert_eq!(trace.shape()[0], self.len_samples);
+
         /* This function updates the main arrays of the CPA, as shown in Alg. 4
         in the paper.*/
         self.len_leakages += 1;
@@ -220,6 +224,11 @@ impl Add for Cpa {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
+        debug_assert_eq!(self.target_byte, rhs.target_byte);
+        debug_assert_eq!(self.guess_range, rhs.guess_range);
+        debug_assert_eq!(self.len_samples, rhs.len_samples);
+        debug_assert_eq!(self.leakage_func, rhs.leakage_func);
+
         Self {
             sum_leakages: self.sum_leakages + rhs.sum_leakages,
             sig_leakages: self.sig_leakages + rhs.sig_leakages,
@@ -227,13 +236,13 @@ impl Add for Cpa {
             sig_keys: self.sig_keys + rhs.sig_keys,
             values: self.values + rhs.values,
             a_l: self.a_l + rhs.a_l,
-            target_byte: rhs.target_byte,
+            target_byte: self.target_byte,
             len_leakages: self.len_leakages + rhs.len_leakages,
-            guess_range: rhs.guess_range,
+            guess_range: self.guess_range,
             corr: self.corr + rhs.corr,
             max_corr: self.max_corr,
             rank_slice: self.rank_slice,
-            len_samples: rhs.len_samples,
+            len_samples: self.len_samples,
             leakage_func: self.leakage_func,
         }
     }

@@ -1,5 +1,6 @@
 use ndarray::{concatenate, Array1, Array2, ArrayView1, ArrayView2, Axis};
 use std::ops::Add;
+
 pub struct Dpa<T> {
     /* List of internal class variables */
     sum_0: Array2<f32>,
@@ -38,11 +39,14 @@ impl<T: Clone> Dpa<T> {
         }
     }
 
-    //
+    /// # Panics
+    /// Panic in debug if `trace.shape()[0] != self.len_samples`.
     pub fn update<U>(&mut self, trace: ArrayView1<U>, metadata: T)
     where
         U: Into<f32> + Copy,
     {
+        debug_assert_eq!(trace.shape()[0], self.len_samples);
+
         /* This function updates the internal arrays of the DPA
         It accepts trace_batch and plaintext_batch to update them*/
         for guess in 0..self.guess_range as i16 {
@@ -85,6 +89,7 @@ impl<T: Clone> Dpa<T> {
             }
         }
     }
+
     pub fn assign_rank_traces(&mut self, value: usize) {
         self.rank_traces = value;
     }
@@ -154,16 +159,20 @@ impl<T> Add for Dpa<T> {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
+        debug_assert_eq!(self.len_samples, rhs.len_samples);
+        debug_assert_eq!(self.guess_range, rhs.guess_range);
+        debug_assert_eq!(self.leakage_func, rhs.leakage_func);
+
         Self {
             sum_0: self.sum_0 + rhs.sum_0,
             sum_1: self.sum_1 + rhs.sum_1,
             count_0: self.count_0 + rhs.count_0,
             count_1: self.count_1 + rhs.count_1,
-            guess_range: rhs.guess_range,
+            guess_range: self.guess_range,
             corr: self.corr + rhs.corr,
             max_corr: self.max_corr,
             rank_slice: self.rank_slice,
-            len_samples: rhs.len_samples,
+            len_samples: self.len_samples,
             leakage_func: self.leakage_func,
             rank_traces: self.rank_traces,
             len_leakages: self.len_leakages + rhs.len_leakages,

@@ -89,17 +89,23 @@ impl Cpa {
         }
     }
 
+    /// # Panics
+    /// - Panic in debug if `trace_batch.shape()[0] != plaintext_batch.shape()[0]`.
+    /// - Panic in debug if `trace_batch.shape()[1] != self.len_samples`.
     pub fn update<T, U>(&mut self, trace_batch: ArrayView2<T>, plaintext_batch: ArrayView2<U>)
     where
         T: Into<f32> + Copy,
         U: Into<usize> + Copy,
     {
+        debug_assert_eq!(trace_batch.shape()[0], plaintext_batch.shape()[0]);
+        debug_assert_eq!(trace_batch.shape()[1], self.len_samples);
+
         /* This function updates the internal arrays of the CPA
         It accepts trace_batch and plaintext_batch to update them*/
         let trace_batch = trace_batch.map(|&t| t.into());
         let plaintext_batch = plaintext_batch.map(|&m| m.into());
 
-        self.update_values(plaintext_batch.view(), trace_batch.view(), self.guess_range);
+        self.update_values(trace_batch.view(), plaintext_batch.view(), self.guess_range);
         self.update_key_leakages(trace_batch.view(), self.guess_range);
 
         self.len_leakages += self.chunk;
@@ -108,8 +114,8 @@ impl Cpa {
     pub fn update_values(
         /* This function generates the values and cov arrays */
         &mut self,
-        metadata: ArrayView2<usize>,
         trace: ArrayView2<f32>,
+        metadata: ArrayView2<usize>,
         guess_range: usize,
     ) {
         for row in 0..self.chunk {
@@ -227,6 +233,10 @@ impl Add for Cpa {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
+        debug_assert_eq!(self.len_samples, rhs.len_samples);
+        debug_assert_eq!(self.chunk, rhs.chunk);
+        debug_assert_eq!(self.guess_range, rhs.guess_range);
+
         Self {
             sum_leakages: self.sum_leakages + rhs.sum_leakages,
             sum2_leakages: self.sum2_leakages + rhs.sum2_leakages,
@@ -234,13 +244,13 @@ impl Add for Cpa {
             sum2_keys: self.sum2_keys + rhs.sum2_keys,
             values: self.values + rhs.values,
             len_leakages: self.len_leakages + rhs.len_leakages,
-            guess_range: rhs.guess_range,
-            chunk: rhs.chunk,
+            guess_range: self.guess_range,
+            chunk: self.chunk,
             cov: self.cov + rhs.cov,
             corr: self.corr + rhs.corr,
             max_corr: self.max_corr,
             rank_slice: self.rank_slice,
-            len_samples: rhs.len_samples,
+            len_samples: self.len_samples,
             leakage_func: self.leakage_func,
             rank_traces: self.rank_traces,
         }
