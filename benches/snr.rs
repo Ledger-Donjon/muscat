@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use muscat::processors::{compute_snr, Snr};
+use muscat::processors::{snr, Snr};
 use ndarray::{Array1, Array2};
 use ndarray_rand::rand::{rngs::StdRng, SeedableRng};
 use ndarray_rand::rand_distr::Uniform;
@@ -16,7 +16,7 @@ fn snr_sequential(leakages: &Array2<i64>, plaintexts: &Array2<u8>) -> Array1<f64
 }
 
 fn snr_parallel(leakages: &Array2<i64>, plaintexts: &Array2<u8>) -> Array1<f64> {
-    compute_snr(leakages.view(), 256, |i| plaintexts.row(i)[0].into(), 500)
+    snr(leakages.view(), 256, |i| plaintexts.row(i)[0].into(), 500)
 }
 
 fn bench_snr(c: &mut Criterion) {

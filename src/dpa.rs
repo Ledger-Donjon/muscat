@@ -4,7 +4,6 @@ use std::ops::Add;
 use crate::util::max_per_row;
 
 pub struct Dpa<T> {
-    /* List of internal class variables */
     sum_0: Array2<f32>,
     sum_1: Array2<f32>,
     count_0: Array1<usize>,

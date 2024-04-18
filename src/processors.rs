@@ -85,7 +85,7 @@ impl Add for MeanVar {
 ///
 /// # Panics
 /// Panic if `chunk_size` is 0.
-pub fn compute_snr<T, F>(
+pub fn snr<T, F>(
     leakages: ArrayView2<T>,
     classes: usize,
     get_class: F,

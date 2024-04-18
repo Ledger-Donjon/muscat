@@ -44,7 +44,6 @@ where
 }
 
 pub struct Cpa {
-    /* List of internal class variables */
     sum_leakages: Array1<f32>,
     sum2_leakages: Array1<f32>,
     sum_keys: Array1<f32>,
