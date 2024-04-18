@@ -1,11 +1,15 @@
 //! Convenient utility functions.
 
-use std::{io::Read, path::Path, time::Duration};
+use std::{io::Read, path::Path};
 
-use indicatif::{ProgressBar, ProgressStyle};
 use ndarray::{Array, Array1, Array2, ArrayView2};
 use ndarray_npy::{read_npy, write_npy, ReadNpyError, ReadableElement, WriteNpyError};
 use npyz::{Deserialize, NpyFile};
+
+#[cfg(feature = "progress_bar")]
+use indicatif::{ProgressBar, ProgressStyle};
+#[cfg(feature = "progress_bar")]
+use std::time::Duration;
 
 /// Reads a [`NpyFile`] as a [`Array1`]
 ///
@@ -39,6 +43,7 @@ pub fn save_array<
 }
 
 /// Creates a [`ProgressBar`] with a predefined default style.
+#[cfg(feature = "progress_bar")]
 pub fn progress_bar(len: usize) -> ProgressBar {
     let progress_bar = ProgressBar::new(len as u64).with_style(
         ProgressStyle::with_template("{elapsed_precise} {wide_bar} {pos}/{len} ({eta})").unwrap(),
