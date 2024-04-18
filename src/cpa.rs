@@ -6,7 +6,7 @@ use rayon::{
 };
 use std::{iter::zip, ops::Add};
 
-/// Computes the [`Cpa`] of the given traces.
+/// Computes the [`Cpa`] of the given traces using [`CpaProcessor`].
 ///
 /// # Panics
 /// - Panic if `leakages.shape()[0] != plaintexts.shape()[0]`
@@ -25,13 +25,14 @@ where
     assert_eq!(leakages.shape()[0], plaintexts.shape()[0]);
     assert!(chunk_size > 0);
 
-    let mut cpa = zip(
+    zip(
         leakages.axis_chunks_iter(Axis(0), chunk_size),
         plaintexts.axis_chunks_iter(Axis(0), chunk_size),
     )
     .par_bridge()
     .map(|(leakages_chunk, plaintexts_chunk)| {
-        let mut cpa = Cpa::new(leakages.shape()[1], guess_range, target_byte, leakage_func);
+        let mut cpa =
+            CpaProcessor::new(leakages.shape()[1], guess_range, target_byte, leakage_func);
 
         for i in 0..leakages_chunk.shape()[0] {
             cpa.update(leakages_chunk.row(i), plaintexts_chunk.row(i));
@@ -40,16 +41,45 @@ where
         cpa
     })
     .reduce(
-        || Cpa::new(leakages.shape()[1], guess_range, target_byte, leakage_func),
+        || CpaProcessor::new(leakages.shape()[1], guess_range, target_byte, leakage_func),
         |a, b| a + b,
-    );
-
-    cpa.finalize();
-
-    cpa
+    )
+    .finalize()
 }
 
 pub struct Cpa {
+    /// Guess range upper excluded bound
+    guess_range: usize,
+    corr: Array2<f32>,
+    max_corr: Array1<f32>,
+    rank_slice: Array2<f32>,
+}
+
+impl Cpa {
+    pub fn pass_rank(&self) -> ArrayView2<f32> {
+        self.rank_slice.view()
+    }
+
+    pub fn pass_corr_array(&self) -> ArrayView2<f32> {
+        self.corr.view()
+    }
+
+    pub fn pass_guess(&self) -> usize {
+        let mut init_value = 0.0;
+        let mut guess = 0;
+
+        for i in 0..self.guess_range {
+            if self.max_corr[i] > init_value {
+                init_value = self.max_corr[i];
+                guess = i;
+            }
+        }
+
+        guess
+    }
+}
+
+pub struct CpaProcessor {
     /// Number of samples per trace
     len_samples: usize,
     target_byte: usize,
@@ -64,9 +94,6 @@ pub struct Cpa {
     /// Sum of square of traces per key guess
     guess_sum_squares_leakages: Array1<usize>,
     a_l: Array2<usize>,
-    corr: Array2<f32>,
-    max_corr: Array1<f32>,
-    rank_slice: Array2<f32>,
     /// Leakage model
     leakage_func: fn(usize, usize) -> usize,
     /// Number of traces processed
@@ -74,7 +101,7 @@ pub struct Cpa {
 }
 
 /* This class implements the CPA shown in this paper: https://eprint.iacr.org/2013/794.pdf */
-impl Cpa {
+impl CpaProcessor {
     pub fn new(
         size: usize,
         guess_range: usize,
@@ -90,9 +117,6 @@ impl Cpa {
             guess_sum_leakages: Array1::zeros(guess_range),
             guess_sum_squares_leakages: Array1::zeros(guess_range),
             a_l: Array2::zeros((guess_range, size)),
-            corr: Array2::zeros((guess_range, size)),
-            max_corr: Array1::zeros(guess_range),
-            rank_slice: Array2::zeros((guess_range, 1)),
             leakage_func,
             len_leakages: 0,
         }
@@ -128,10 +152,9 @@ impl Cpa {
         self.len_leakages += 1;
     }
 
-    pub fn finalize(&mut self) {
+    pub fn finalize(&self) -> Cpa {
         /* This function finalizes the calculation after feeding the
         overall traces */
-
         let mut p = Array2::zeros((self.guess_range, self.guess_range));
         for guess in 0..self.guess_range {
             for x in 0..self.guess_range {
@@ -139,6 +162,7 @@ impl Cpa {
             }
         }
 
+        let mut corr = Array2::zeros((self.guess_range, self.len_samples));
         for guess in 0..self.guess_range {
             let mean_key = self.guess_sum_leakages[guess] as f32 / self.len_leakages as f32;
             let mean_squares_key =
@@ -165,42 +189,28 @@ impl Cpa {
 
             #[allow(clippy::needless_range_loop)]
             for u in 0..self.len_samples {
-                self.corr[[guess, u]] = tmp[u];
+                corr[[guess, u]] = tmp[u];
             }
         }
 
-        self.max_corr = max_per_row(self.corr.view());
+        let max_corr = max_per_row(corr.view());
 
-        self.rank_slice = concatenate![
+        let mut rank_slice = Array2::zeros((self.guess_range, 1));
+        rank_slice = concatenate![
             Axis(1),
-            self.rank_slice,
-            self.max_corr
+            rank_slice,
+            max_corr
                 .clone()
-                .into_shape((self.max_corr.shape()[0], 1))
+                .into_shape((max_corr.shape()[0], 1))
                 .unwrap()
         ];
-    }
 
-    pub fn pass_rank(&self) -> ArrayView2<f32> {
-        self.rank_slice.view()
-    }
-
-    pub fn pass_corr_array(&self) -> ArrayView2<f32> {
-        self.corr.view()
-    }
-
-    pub fn pass_guess(&self) -> usize {
-        let mut init_value = 0.0;
-        let mut guess = 0;
-
-        for i in 0..self.guess_range {
-            if self.max_corr[i] > init_value {
-                init_value = self.max_corr[i];
-                guess = i;
-            }
+        Cpa {
+            guess_range: self.guess_range,
+            corr,
+            max_corr,
+            rank_slice,
         }
-
-        guess
     }
 
     fn sum_mult(&self, a: ArrayView1<usize>, b: ArrayView1<usize>) -> i32 {
@@ -208,7 +218,7 @@ impl Cpa {
     }
 }
 
-impl Add for Cpa {
+impl Add for CpaProcessor {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
@@ -227,9 +237,6 @@ impl Add for Cpa {
             guess_sum_squares_leakages: self.guess_sum_squares_leakages
                 + rhs.guess_sum_squares_leakages,
             a_l: self.a_l + rhs.a_l,
-            corr: self.corr + rhs.corr,
-            max_corr: self.max_corr,
-            rank_slice: self.rank_slice,
             leakage_func: self.leakage_func,
             len_leakages: self.len_leakages + rhs.len_leakages,
         }

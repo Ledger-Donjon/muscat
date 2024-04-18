@@ -4,7 +4,7 @@ use std::{iter::zip, ops::Add};
 
 use crate::util::max_per_row;
 
-/// Computes the [`Cpa`] of the given traces.
+/// Computes the [`Cpa`] of the given traces using [`CpaProcessor`].
 ///
 /// # Panics
 /// - Panic if `leakages.shape()[0] != plaintexts.shape()[0]`
@@ -23,27 +23,56 @@ where
     assert_eq!(leakages.shape()[0], plaintexts.shape()[0]);
     assert!(chunk_size > 0);
 
-    let mut cpa = zip(
+    zip(
         leakages.axis_chunks_iter(Axis(0), chunk_size),
         plaintexts.axis_chunks_iter(Axis(0), chunk_size),
     )
     .par_bridge()
     .map(|(leakages_chunk, plaintexts_chunk)| {
-        let mut cpa = Cpa::new(leakages.shape()[1], chunk_size, guess_range, leakage_func);
+        let mut cpa = CpaProcessor::new(leakages.shape()[1], chunk_size, guess_range, leakage_func);
         cpa.update(leakages_chunk, plaintexts_chunk);
         cpa
     })
     .reduce(
-        || Cpa::new(leakages.shape()[1], chunk_size, guess_range, leakage_func),
+        || CpaProcessor::new(leakages.shape()[1], chunk_size, guess_range, leakage_func),
         |x, y| x + y,
-    );
-
-    cpa.finalize();
-
-    cpa
+    )
+    .finalize()
 }
 
 pub struct Cpa {
+    /// Guess range upper excluded bound
+    guess_range: usize,
+    corr: Array2<f32>,
+    max_corr: Array1<f32>,
+    rank_slice: Array2<f32>,
+}
+
+impl Cpa {
+    pub fn pass_rank(&self) -> ArrayView2<f32> {
+        self.rank_slice.view()
+    }
+
+    pub fn pass_corr_array(&self) -> ArrayView2<f32> {
+        self.corr.view()
+    }
+
+    pub fn pass_guess(&self) -> usize {
+        let mut init_value = 0.0;
+        let mut guess = 0;
+
+        for i in 0..self.guess_range {
+            if self.max_corr[i] > init_value {
+                init_value = self.max_corr[i];
+                guess = i;
+            }
+        }
+
+        guess
+    }
+}
+
+pub struct CpaProcessor {
     /// Number of samples per trace
     len_samples: usize,
     /// Guess range upper excluded bound
@@ -58,9 +87,6 @@ pub struct Cpa {
     guess_sum2_leakages: Array1<f32>,
     values: Array2<f32>,
     cov: Array2<f32>,
-    corr: Array2<f32>,
-    max_corr: Array1<f32>,
-    rank_slice: Array2<f32>,
     rank_traces: usize, // Number of traces to calculate succes rate
     /// Batch size
     batch_size: usize,
@@ -73,7 +99,7 @@ pub struct Cpa {
 /* This class implements the CPA algorithm shown in:
 https://www.iacr.org/archive/ches2004/31560016/31560016.pdf */
 
-impl Cpa {
+impl CpaProcessor {
     pub fn new(
         size: usize,
         batch_size: usize,
@@ -89,9 +115,6 @@ impl Cpa {
             guess_sum2_leakages: Array1::zeros(guess_range),
             values: Array2::zeros((batch_size, guess_range)),
             cov: Array2::zeros((guess_range, size)),
-            corr: Array2::zeros((guess_range, size)),
-            max_corr: Array1::zeros(guess_range),
-            rank_slice: Array2::zeros((guess_range, 1)),
             rank_traces: 0,
             batch_size,
             leakage_func,
@@ -156,34 +179,44 @@ impl Cpa {
         &mut self,
         trace_batch: ArrayView2<T>,
         plaintext_batch: ArrayView2<U>,
-    ) where
+    ) -> Option<Cpa>
+    where
         T: Into<f32> + Copy,
         U: Into<usize> + Copy,
     {
         /* This function updates the main arrays of the CPA for the success rate*/
         self.update(trace_batch, plaintext_batch);
+
+        // WARN: if self.rank_traces == 0 this function will panic (division by zero)
+        // WARN: if self.rank_traces is not divisible by self.batch_size this branch will never be
+        // taken
         if self.len_leakages % self.rank_traces == 0 {
-            self.finalize();
+            let mut cpa = self.finalize();
+
             if self.len_leakages == self.rank_traces {
-                self.rank_slice = self
+                cpa.rank_slice = cpa
                     .max_corr
                     .clone()
-                    .into_shape((self.max_corr.shape()[0], 1))
+                    .into_shape((cpa.max_corr.shape()[0], 1))
                     .unwrap();
             } else {
-                self.rank_slice = concatenate![
+                cpa.rank_slice = concatenate![
                     Axis(1),
-                    self.rank_slice,
-                    self.max_corr
+                    cpa.rank_slice,
+                    cpa.max_corr
                         .clone()
-                        .into_shape((self.max_corr.shape()[0], 1))
+                        .into_shape((cpa.max_corr.shape()[0], 1))
                         .unwrap()
                 ];
             }
+
+            Some(cpa)
+        } else {
+            None
         }
     }
 
-    pub fn finalize(&mut self) {
+    pub fn finalize(&self) -> Cpa {
         /* This function finalizes the calculation after
         feeding all stored acc arrays */
         let cov_n = self.cov.clone() / self.len_leakages as f32;
@@ -192,6 +225,7 @@ impl Cpa {
         let avg_leakages = self.sum_leakages.clone() / self.len_leakages as f32;
         let std_leakages = self.sum2_leakages.clone() / self.len_leakages as f32;
 
+        let mut corr = Array2::zeros((self.guess_range, self.len_samples));
         for i in 0..self.guess_range {
             for x in 0..self.len_samples {
                 let numerator = cov_n[[i, x]] - (avg_keys[i] * avg_leakages[x]);
@@ -200,43 +234,27 @@ impl Cpa {
 
                 let denominator_2 = std_leakages[x] - (avg_leakages[x] * avg_leakages[x]);
                 if numerator != 0.0 {
-                    self.corr[[i, x]] =
-                        f32::abs(numerator / f32::sqrt(denominator_1 * denominator_2));
+                    corr[[i, x]] = f32::abs(numerator / f32::sqrt(denominator_1 * denominator_2));
                 }
             }
         }
 
-        self.max_corr = max_per_row(self.corr.view());
+        let max_corr = max_per_row(corr.view());
+
+        Cpa {
+            guess_range: self.guess_range,
+            corr,
+            max_corr,
+            rank_slice: Array2::zeros((self.guess_range, 1)),
+        }
     }
 
     pub fn success_traces(&mut self, traces_no: usize) {
         self.rank_traces = traces_no;
     }
-
-    pub fn pass_rank(&self) -> ArrayView2<f32> {
-        self.rank_slice.view()
-    }
-
-    pub fn pass_corr_array(&self) -> ArrayView2<f32> {
-        self.corr.view()
-    }
-
-    pub fn pass_guess(&self) -> usize {
-        let mut init_value = 0.0;
-        let mut guess = 0;
-
-        for i in 0..self.guess_range {
-            if self.max_corr[i] > init_value {
-                init_value = self.max_corr[i];
-                guess = i;
-            }
-        }
-
-        guess
-    }
 }
 
-impl Add for Cpa {
+impl Add for CpaProcessor {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
@@ -253,9 +271,6 @@ impl Add for Cpa {
             guess_sum2_leakages: self.guess_sum2_leakages + rhs.guess_sum2_leakages,
             values: self.values + rhs.values,
             cov: self.cov + rhs.cov,
-            corr: self.corr + rhs.corr,
-            max_corr: self.max_corr,
-            rank_slice: self.rank_slice,
             rank_traces: self.rank_traces,
             batch_size: self.batch_size,
             leakage_func: self.leakage_func,

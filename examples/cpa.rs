@@ -1,6 +1,6 @@
 use anyhow::Result;
 use indicatif::ProgressIterator;
-use muscat::cpa_normal::*;
+use muscat::cpa_normal::CpaProcessor;
 use muscat::leakage::{hw, sbox};
 use muscat::util::{progress_bar, read_array2_from_npy_file, save_array2};
 use ndarray::*;
@@ -30,11 +30,11 @@ fn cpa() -> Result<()> {
     let plaintext = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
     let len_traces = leakages.shape()[0];
 
-    let mut cpa_parallel = ((0..len_traces).step_by(batch))
+    let cpa_parallel = ((0..len_traces).step_by(batch))
         .progress_with(progress_bar(len_traces))
         .par_bridge()
         .map(|row_number| {
-            let mut cpa = Cpa::new(size, batch, guess_range, leakage_model);
+            let mut cpa = CpaProcessor::new(size, batch, guess_range, leakage_model);
             let range_rows = row_number..row_number + batch;
             let range_samples = start_sample..end_sample;
             let sample_traces = leakages
@@ -45,14 +45,14 @@ fn cpa() -> Result<()> {
             cpa
         })
         .reduce(
-            || Cpa::new(size, batch, guess_range, leakage_model),
+            || CpaProcessor::new(size, batch, guess_range, leakage_model),
             |x, y| x + y,
         );
 
-    cpa_parallel.finalize();
-    println!("Guessed key = {}", cpa_parallel.pass_guess());
+    let cpa = cpa_parallel.finalize();
+    println!("Guessed key = {}", cpa.pass_guess());
 
-    save_array2("results/corr.npy", cpa_parallel.pass_corr_array().view())?;
+    save_array2("results/corr.npy", cpa.pass_corr_array().view())?;
 
     Ok(())
 }
@@ -68,7 +68,7 @@ fn success() -> Result<()> {
     let nfiles = 13; // Number of files in the directory. TBD: Automating this value
     let rank_traces = 1000;
 
-    let mut cpa = Cpa::new(size, batch, guess_range, leakage_model);
+    let mut cpa = CpaProcessor::new(size, batch, guess_range, leakage_model);
 
     cpa.success_traces(rank_traces);
     for i in (0..nfiles).progress() {
@@ -89,7 +89,7 @@ fn success() -> Result<()> {
         }
     }
 
-    cpa.finalize();
+    let cpa = cpa.finalize();
     println!("Guessed key = {}", cpa.pass_guess());
 
     // save corr key curves in npy
