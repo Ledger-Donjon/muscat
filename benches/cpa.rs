@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use muscat::cpa::{self, Cpa};
+use muscat::cpa::{self, Cpa, CpaProcessor};
 use muscat::cpa_normal;
 use muscat::leakage::{hw, sbox};
 use ndarray::{Array2, ArrayView1, Axis};
@@ -13,7 +13,7 @@ pub fn leakage_model(value: usize, guess: usize) -> usize {
 }
 
 fn cpa_sequential(leakages: &Array2<f64>, plaintexts: &Array2<u8>) -> Cpa {
-    let mut cpa = Cpa::new(leakages.shape()[1], 256, 0, leakage_model);
+    let mut cpa = CpaProcessor::new(leakages.shape()[1], 256, 0, leakage_model);
 
     for i in 0..leakages.shape()[0] {
         cpa.update(
@@ -22,9 +22,7 @@ fn cpa_sequential(leakages: &Array2<f64>, plaintexts: &Array2<u8>) -> Cpa {
         );
     }
 
-    cpa.finalize();
-
-    cpa
+    cpa.finalize()
 }
 
 pub fn leakage_model_normal(value: ArrayView1<usize>, guess: usize) -> usize {
@@ -34,7 +32,8 @@ pub fn leakage_model_normal(value: ArrayView1<usize>, guess: usize) -> usize {
 fn cpa_normal_sequential(leakages: &Array2<f64>, plaintexts: &Array2<u8>) -> cpa_normal::Cpa {
     let chunk_size = 500;
 
-    let mut cpa = cpa_normal::Cpa::new(leakages.shape()[1], chunk_size, 256, leakage_model_normal);
+    let mut cpa =
+        cpa_normal::CpaProcessor::new(leakages.shape()[1], chunk_size, 256, leakage_model_normal);
 
     for (leakages_chunk, plaintexts_chunk) in zip(
         leakages.axis_chunks_iter(Axis(0), chunk_size),
@@ -43,9 +42,7 @@ fn cpa_normal_sequential(leakages: &Array2<f64>, plaintexts: &Array2<u8>) -> cpa
         cpa.update(leakages_chunk.map(|&x| x as f32).view(), plaintexts_chunk);
     }
 
-    cpa.finalize();
-
-    cpa
+    cpa.finalize()
 }
 
 fn bench_cpa(c: &mut Criterion) {

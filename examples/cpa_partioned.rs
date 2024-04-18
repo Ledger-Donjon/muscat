@@ -1,6 +1,6 @@
 use anyhow::Result;
 use indicatif::ProgressIterator;
-use muscat::cpa::*;
+use muscat::cpa::CpaProcessor;
 use muscat::leakage::{hw, sbox};
 use muscat::util::{progress_bar, read_array2_from_npy_file, save_array};
 use rayon::prelude::{ParallelBridge, ParallelIterator};
@@ -23,7 +23,7 @@ fn cpa() -> Result<()> {
     let nfiles = 5; // Number of files in the directory. TBD: Automating this value
 
     /* Parallel operation using multi-threading on batches */
-    let mut cpa = (0..nfiles)
+    let cpa = (0..nfiles)
         .progress_with(progress_bar(nfiles))
         .map(|n| {
             let dir_l = format!("{folder}/l{n}.npy");
@@ -34,7 +34,7 @@ fn cpa() -> Result<()> {
         })
         .par_bridge()
         .map(|batch| {
-            let mut c = Cpa::new(size, guess_range, target_byte, leakage_model);
+            let mut c = CpaProcessor::new(size, guess_range, target_byte, leakage_model);
             let len_leakage = batch.0.shape()[0];
             for i in 0..len_leakage {
                 c.update(
@@ -45,15 +45,15 @@ fn cpa() -> Result<()> {
             c
         })
         .reduce(
-            || Cpa::new(size, guess_range, target_byte, leakage_model),
-            |a: Cpa, b| a + b,
+            || CpaProcessor::new(size, guess_range, target_byte, leakage_model),
+            |a: CpaProcessor, b| a + b,
         );
 
-    cpa.finalize();
-    println!("Guessed key = {}", cpa.pass_guess());
+    let cpa_result = cpa.finalize();
+    println!("Guessed key = {}", cpa_result.pass_guess());
 
     // save corr key curves in npy
-    save_array("../results/corr.npy", &cpa.pass_corr_array())?;
+    save_array("../results/corr.npy", &cpa_result.pass_corr_array())?;
 
     Ok(())
 }
