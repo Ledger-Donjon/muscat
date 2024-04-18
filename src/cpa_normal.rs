@@ -1,6 +1,8 @@
-use ndarray::{concatenate, Array1, Array2, ArrayView1, ArrayView2, Axis};
+use ndarray::{concatenate, s, Array1, Array2, ArrayView1, ArrayView2, Axis};
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use std::{iter::zip, ops::Add};
+
+use crate::util::max_per_row;
 
 /// Computes the [`Cpa`] of the given traces.
 ///
@@ -183,24 +185,9 @@ impl Cpa {
                 }
             }
         }
-        self.select_max();
-    }
 
-    fn select_max(&mut self) {
-        for i in 0..self.guess_range {
-            let row = self.corr.row(i);
-            // Calculating the max value in the row
-            let max_value = row
-                .into_iter()
-                .reduce(|a, b| {
-                    let mut tmp = a;
-                    if tmp < b {
-                        tmp = b;
-                    }
-                    tmp
-                })
-                .unwrap();
-            self.max_corr[[i, 0]] = *max_value;
+        for (i, max) in max_per_row(self.corr.view()).into_iter().enumerate() {
+            self.max_corr[[i, 0]] = max;
         }
     }
 

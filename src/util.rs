@@ -3,7 +3,7 @@
 use std::{io::Read, path::Path, time::Duration};
 
 use indicatif::{ProgressBar, ProgressStyle};
-use ndarray::{Array, Array1, Array2, ArrayView2};
+use ndarray::{Array, Array1, Array2, ArrayView2, Axis};
 use ndarray_npy::{read_npy, write_npy, ReadNpyError, ReadableElement, WriteNpyError};
 use npyz::{Deserialize, NpyFile};
 
@@ -55,4 +55,21 @@ pub fn read_array2_from_npy_file<T: ReadableElement>(
 
 pub fn save_array2(path: impl AsRef<Path>, array: ArrayView2<f32>) -> Result<(), WriteNpyError> {
     write_npy(path, &array)
+}
+
+/// Return an array where the i-th element contains the maximum of the i-th row of the input array.
+pub fn max_per_row(arr: ArrayView2<f32>) -> Array1<f32> {
+    arr.axis_iter(Axis(0))
+        .map(|row| {
+            *row.into_iter()
+                .reduce(|a, b| {
+                    let mut tmp = a;
+                    if tmp < b {
+                        tmp = b;
+                    }
+                    tmp
+                })
+                .unwrap()
+        })
+        .collect()
 }

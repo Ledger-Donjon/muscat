@@ -1,3 +1,4 @@
+use crate::util::max_per_row;
 use ndarray::{concatenate, s, Array1, Array2, ArrayView1, ArrayView2, Axis};
 use rayon::{
     iter::ParallelBridge,
@@ -166,28 +167,7 @@ impl Cpa {
             }
         }
 
-        self.calculation();
-    }
-
-    fn calculation(&mut self) {
-        for guess in 0..self.guess_range {
-            // Calculating the max value in the row
-            let max_value = self
-                .corr
-                .row(guess)
-                .into_iter()
-                .reduce(|a, b| {
-                    let mut max = a;
-                    if max < b {
-                        max = b;
-                    }
-
-                    max
-                })
-                .unwrap();
-
-            self.max_corr[guess] = *max_value;
-        }
+        self.max_corr = max_per_row(self.corr.view());
 
         self.rank_slice = concatenate![
             Axis(1),
