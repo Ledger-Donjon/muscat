@@ -7,7 +7,7 @@ pub struct Dpa<T> {
     /// Number of samples per trace
     len_samples: usize,
     /// Guess range upper excluded bound
-    guess_range: i32,
+    guess_range: usize,
     /// Sum of traces for which the selection function equals 0
     sum_0: Array2<f32>,
     /// Sum of traces for which the selection function equals 1
@@ -31,17 +31,17 @@ https://paulkocher.com/doc/DifferentialPowerAnalysis.pdf
 https://web.mit.edu/6.857/OldStuff/Fall03/ref/kocher-DPATechInfo.pdf */
 
 impl<T: Clone> Dpa<T> {
-    pub fn new(size: usize, guess_range: i32, f: fn(T, usize) -> usize) -> Self {
+    pub fn new(size: usize, guess_range: usize, f: fn(T, usize) -> usize) -> Self {
         Self {
             len_samples: size,
             guess_range,
-            sum_0: Array2::zeros((guess_range as usize, size)),
-            sum_1: Array2::zeros((guess_range as usize, size)),
-            count_0: Array1::zeros(guess_range as usize),
-            count_1: Array1::zeros(guess_range as usize),
-            corr: Array2::zeros((guess_range as usize, size)),
-            max_corr: Array1::zeros(guess_range as usize),
-            rank_slice: Array2::zeros((guess_range as usize, 1)),
+            sum_0: Array2::zeros((guess_range, size)),
+            sum_1: Array2::zeros((guess_range, size)),
+            count_0: Array1::zeros(guess_range),
+            count_1: Array1::zeros(guess_range),
+            corr: Array2::zeros((guess_range, size)),
+            max_corr: Array1::zeros(guess_range),
+            rank_slice: Array2::zeros((guess_range, 1)),
             rank_traces: 0,
             leakage_func: f,
             len_leakages: 0,
@@ -58,24 +58,24 @@ impl<T: Clone> Dpa<T> {
 
         /* This function updates the internal arrays of the DPA
         It accepts trace_batch and plaintext_batch to update them*/
-        for guess in 0..self.guess_range as i16 {
-            let index = (self.leakage_func)(metadata.clone(), guess as usize);
+        for guess in 0..self.guess_range {
+            let index = (self.leakage_func)(metadata.clone(), guess);
             if index & 1 == 1 {
                 // classification is performed based on the lsb
-                // let tmp_row: Array1<f32> = self.sum_1.row(guess as usize).to_owned() + tmp_trace.clone();
-                // self.sum_1.row_mut(guess as usize).assign(&tmp_row);
+                // let tmp_row: Array1<f32> = self.sum_1.row(guess).to_owned() + tmp_trace.clone();
+                // self.sum_1.row_mut(guess).assign(&tmp_row);
                 for i in 0..self.len_samples {
-                    self.sum_1[[guess as usize, i]] += trace[i].into();
+                    self.sum_1[[guess, i]] += trace[i].into();
                 }
-                self.count_1[guess as usize] += 1;
+                self.count_1[guess] += 1;
             } else {
-                // let tmp_row: Array1<f32> = self.sum_0.row(guess as usize).to_owned() + tmp_trace.clone();
-                // self.sum_0.row_mut(guess as usize).assign(&tmp_row);
+                // let tmp_row: Array1<f32> = self.sum_0.row(guess).to_owned() + tmp_trace.clone();
+                // self.sum_0.row_mut(guess).assign(&tmp_row);
 
                 for i in 0..self.len_samples {
-                    self.sum_0[[guess as usize, i]] += trace[i].into();
+                    self.sum_0[[guess, i]] += trace[i].into();
                 }
-                self.count_0[guess as usize] += 1;
+                self.count_0[guess] += 1;
             }
         }
         self.len_leakages += 1;
@@ -117,10 +117,10 @@ impl<T: Clone> Dpa<T> {
     pub fn finalize(&mut self) {
         /* This function finalizes the calculation after
         feeding all stored acc arrays */
-        let mut tmp_avg_0 = Array2::zeros((self.guess_range as usize, self.len_samples));
-        let mut tmp_avg_1 = Array2::zeros((self.guess_range as usize, self.len_samples));
+        let mut tmp_avg_0 = Array2::zeros((self.guess_range, self.len_samples));
+        let mut tmp_avg_1 = Array2::zeros((self.guess_range, self.len_samples));
 
-        for row in 0..self.guess_range as usize {
+        for row in 0..self.guess_range {
             let tmp_row_0 = self.sum_0.row(row).to_owned() / self.count_0[row] as f32;
             let tmp_row_1 = self.sum_1.row(row).to_owned() / self.count_1[row] as f32;
             tmp_avg_0.row_mut(row).assign(&tmp_row_0);
@@ -145,15 +145,17 @@ impl<T: Clone> Dpa<T> {
         self.corr.view()
     }
 
-    pub fn pass_guess(&self) -> i32 {
-        let mut init_value: f32 = 0.0;
-        let mut guess: i32 = 0;
+    pub fn pass_guess(&self) -> usize {
+        let mut init_value = 0.0;
+        let mut guess = 0;
+
         for i in 0..self.guess_range {
-            if self.max_corr[i as usize] > init_value {
-                init_value = self.max_corr[i as usize];
+            if self.max_corr[i] > init_value {
+                init_value = self.max_corr[i];
                 guess = i;
             }
         }
+
         guess
     }
 }
