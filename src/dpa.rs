@@ -11,7 +11,7 @@ pub struct Dpa<T> {
     count_1: Array1<usize>,
     guess_range: i32,
     corr: Array2<f32>,
-    max_corr: Array2<f32>,
+    max_corr: Array1<f32>,
     rank_slice: Array2<f32>,
     leakage_func: fn(T, usize) -> usize,
     len_samples: usize,
@@ -33,7 +33,7 @@ impl<T: Clone> Dpa<T> {
             count_0: Array1::zeros(guess_range as usize),
             count_1: Array1::zeros(guess_range as usize),
             corr: Array2::zeros((guess_range as usize, size)),
-            max_corr: Array2::zeros((guess_range as usize, 1)),
+            max_corr: Array1::zeros(guess_range as usize),
             rank_slice: Array2::zeros((guess_range as usize, 1)),
             leakage_func: f,
             rank_traces: 0,
@@ -85,9 +85,20 @@ impl<T: Clone> Dpa<T> {
             self.finalize();
 
             if self.len_leakages == self.rank_traces {
-                self.rank_slice = self.max_corr.clone();
+                self.rank_slice = self
+                    .max_corr
+                    .clone()
+                    .into_shape((self.max_corr.shape()[0], 1))
+                    .unwrap();
             } else {
-                self.rank_slice = concatenate![Axis(1), self.rank_slice, self.max_corr];
+                self.rank_slice = concatenate![
+                    Axis(1),
+                    self.rank_slice,
+                    self.max_corr
+                        .clone()
+                        .into_shape((self.max_corr.shape()[0], 1))
+                        .unwrap()
+                ];
             }
         }
     }
@@ -112,9 +123,7 @@ impl<T: Clone> Dpa<T> {
 
         self.corr = diff.map(|e| f32::abs(*e));
 
-        for (i, max) in max_per_row(self.corr.view()).into_iter().enumerate() {
-            self.max_corr[[i, 0]] = max;
-        }
+        self.max_corr = max_per_row(self.corr.view());
     }
 
     pub fn success_traces(&mut self, traces_no: usize) {
@@ -133,8 +142,8 @@ impl<T: Clone> Dpa<T> {
         let mut init_value: f32 = 0.0;
         let mut guess: i32 = 0;
         for i in 0..self.guess_range {
-            if self.max_corr[[i as usize, 0]] > init_value {
-                init_value = self.max_corr[[i as usize, 0]];
+            if self.max_corr[i as usize] > init_value {
+                init_value = self.max_corr[i as usize];
                 guess = i;
             }
         }

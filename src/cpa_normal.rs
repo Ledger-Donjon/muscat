@@ -1,4 +1,4 @@
-use ndarray::{concatenate, s, Array1, Array2, ArrayView1, ArrayView2, Axis};
+use ndarray::{concatenate, Array1, Array2, ArrayView1, ArrayView2, Axis};
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use std::{iter::zip, ops::Add};
 
@@ -54,7 +54,7 @@ pub struct Cpa {
     guess_range: usize,
     cov: Array2<f32>,
     corr: Array2<f32>,
-    max_corr: Array2<f32>,
+    max_corr: Array1<f32>,
     rank_slice: Array2<f32>,
     leakage_func: fn(ArrayView1<usize>, usize) -> usize,
     len_samples: usize,
@@ -83,7 +83,7 @@ impl Cpa {
             values: Array2::zeros((batch, guess_range)),
             cov: Array2::zeros((guess_range, size)),
             corr: Array2::zeros((guess_range, size)),
-            max_corr: Array2::zeros((guess_range, 1)),
+            max_corr: Array1::zeros(guess_range),
             rank_slice: Array2::zeros((guess_range, 1)),
             leakage_func,
             len_leakages: 0,
@@ -156,9 +156,20 @@ impl Cpa {
         if self.len_leakages % self.rank_traces == 0 {
             self.finalize();
             if self.len_leakages == self.rank_traces {
-                self.rank_slice = self.max_corr.clone();
+                self.rank_slice = self
+                    .max_corr
+                    .clone()
+                    .into_shape((self.max_corr.shape()[0], 1))
+                    .unwrap();
             } else {
-                self.rank_slice = concatenate![Axis(1), self.rank_slice, self.max_corr];
+                self.rank_slice = concatenate![
+                    Axis(1),
+                    self.rank_slice,
+                    self.max_corr
+                        .clone()
+                        .into_shape((self.max_corr.shape()[0], 1))
+                        .unwrap()
+                ];
             }
         }
     }
@@ -186,9 +197,7 @@ impl Cpa {
             }
         }
 
-        for (i, max) in max_per_row(self.corr.view()).into_iter().enumerate() {
-            self.max_corr[[i, 0]] = max;
-        }
+        self.max_corr = max_per_row(self.corr.view());
     }
 
     pub fn success_traces(&mut self, traces_no: usize) {
@@ -206,12 +215,14 @@ impl Cpa {
     pub fn pass_guess(&self) -> usize {
         let mut init_value = 0.0;
         let mut guess = 0;
+
         for i in 0..self.guess_range {
-            if self.max_corr[[i, 0]] > init_value {
-                init_value = self.max_corr[[i, 0]];
+            if self.max_corr[i] > init_value {
+                init_value = self.max_corr[i];
                 guess = i;
             }
         }
+
         guess
     }
 }
