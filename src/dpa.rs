@@ -4,17 +4,25 @@ use std::ops::Add;
 use crate::util::max_per_row;
 
 pub struct Dpa<T> {
-    sum_0: Array2<f32>,
-    sum_1: Array2<f32>,
-    count_0: Array1<usize>,
-    count_1: Array1<usize>,
+    /// Number of samples per trace
+    len_samples: usize,
+    /// Guess range upper excluded bound
     guess_range: i32,
+    /// Sum of traces for which the selection function equals 0
+    sum_0: Array2<f32>,
+    /// Sum of traces for which the selection function equals 1
+    sum_1: Array2<f32>,
+    /// Number of traces processed for which the selection function equals 0
+    count_0: Array1<usize>,
+    /// Number of traces processed for which the selection function equals 1
+    count_1: Array1<usize>,
     corr: Array2<f32>,
     max_corr: Array1<f32>,
     rank_slice: Array2<f32>,
-    leakage_func: fn(T, usize) -> usize,
-    len_samples: usize,
     rank_traces: usize, // Number of traces to calculate succes rate
+    /// Selection function
+    leakage_func: fn(T, usize) -> usize,
+    /// Number of traces processed
     len_leakages: usize,
 }
 
@@ -26,7 +34,7 @@ impl<T: Clone> Dpa<T> {
     pub fn new(size: usize, guess_range: i32, f: fn(T, usize) -> usize) -> Self {
         Self {
             len_samples: size,
-            guess_range, //fixing clippy warning
+            guess_range,
             sum_0: Array2::zeros((guess_range as usize, size)),
             sum_1: Array2::zeros((guess_range as usize, size)),
             count_0: Array1::zeros(guess_range as usize),
@@ -34,8 +42,8 @@ impl<T: Clone> Dpa<T> {
             corr: Array2::zeros((guess_range as usize, size)),
             max_corr: Array1::zeros(guess_range as usize),
             rank_slice: Array2::zeros((guess_range as usize, 1)),
-            leakage_func: f,
             rank_traces: 0,
+            leakage_func: f,
             len_leakages: 0,
         }
     }
@@ -159,17 +167,17 @@ impl<T> Add for Dpa<T> {
         debug_assert_eq!(self.leakage_func, rhs.leakage_func);
 
         Self {
+            len_samples: self.len_samples,
+            guess_range: self.guess_range,
             sum_0: self.sum_0 + rhs.sum_0,
             sum_1: self.sum_1 + rhs.sum_1,
             count_0: self.count_0 + rhs.count_0,
             count_1: self.count_1 + rhs.count_1,
-            guess_range: self.guess_range,
             corr: self.corr + rhs.corr,
             max_corr: self.max_corr,
             rank_slice: self.rank_slice,
-            len_samples: self.len_samples,
-            leakage_func: self.leakage_func,
             rank_traces: self.rank_traces,
+            leakage_func: self.leakage_func,
             len_leakages: self.len_leakages + rhs.len_leakages,
         }
     }

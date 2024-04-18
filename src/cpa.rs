@@ -50,9 +50,10 @@ where
 }
 
 pub struct Cpa {
-    /// Number of observations per trace
+    /// Number of samples per trace
     len_samples: usize,
     target_byte: usize,
+    /// Guess range upper excluded bound
     guess_range: usize,
     /// Sum of traces
     sum_leakages: Array1<usize>,
@@ -68,6 +69,7 @@ pub struct Cpa {
     rank_slice: Array2<f32>,
     /// Leakage model
     leakage_func: fn(usize, usize) -> usize,
+    /// Number of traces processed
     len_leakages: usize,
 }
 
@@ -216,20 +218,20 @@ impl Add for Cpa {
         debug_assert_eq!(self.leakage_func, rhs.leakage_func);
 
         Self {
+            len_samples: self.len_samples,
+            target_byte: self.target_byte,
+            guess_range: self.guess_range,
             sum_leakages: self.sum_leakages + rhs.sum_leakages,
             sum_squares_leakages: self.sum_squares_leakages + rhs.sum_squares_leakages,
             guess_sum_leakages: self.guess_sum_leakages + rhs.guess_sum_leakages,
             guess_sum_squares_leakages: self.guess_sum_squares_leakages
                 + rhs.guess_sum_squares_leakages,
             a_l: self.a_l + rhs.a_l,
-            target_byte: self.target_byte,
-            len_leakages: self.len_leakages + rhs.len_leakages,
-            guess_range: self.guess_range,
             corr: self.corr + rhs.corr,
             max_corr: self.max_corr,
             rank_slice: self.rank_slice,
-            len_samples: self.len_samples,
             leakage_func: self.leakage_func,
+            len_leakages: self.len_leakages + rhs.len_leakages,
         }
     }
 }
