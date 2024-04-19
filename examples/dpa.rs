@@ -1,9 +1,9 @@
 use anyhow::Result;
 use indicatif::ProgressIterator;
-use muscat::dpa::*;
+use muscat::dpa::Dpa;
 use muscat::leakage::sbox;
 use muscat::util::read_array2_from_npy_file;
-use ndarray::*;
+use ndarray::{s, Array1, Array2};
 use rayon::iter::{ParallelBridge, ParallelIterator};
 
 // traces format
