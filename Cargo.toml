@@ -36,3 +36,7 @@ harness = false
 [[bench]]
 name = "snr"
 harness = false
+
+[[bench]]
+name = "dpa"
+harness = false
