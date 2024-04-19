@@ -1,9 +1,45 @@
 use ndarray::{concatenate, Array1, Array2, ArrayView1, ArrayView2, Axis};
-use std::ops::Add;
+use rayon::iter::{ParallelBridge, ParallelIterator};
+use std::{iter::zip, ops::Add};
 
 use crate::util::max_per_row;
 
-pub struct Dpa<T> {
+pub fn dpa<M, T>(
+    leakages: ArrayView2<T>,
+    metadata: ArrayView1<M>,
+    guess_range: usize,
+    leakage_func: fn(M, usize) -> usize,
+    chunk_size: usize,
+) -> Dpa<M>
+where
+    T: Into<f32> + Copy + Sync,
+    M: Clone + Sync,
+{
+    let mut dpa = zip(
+        leakages.axis_chunks_iter(Axis(0), chunk_size),
+        metadata.axis_chunks_iter(Axis(0), chunk_size),
+    )
+    .par_bridge()
+    .map(|(leakages_chunk, metadata_chunk)| {
+        let mut dpa = Dpa::new(leakages.shape()[1], guess_range, leakage_func);
+
+        for i in 0..leakages_chunk.shape()[0] {
+            dpa.update(leakages_chunk.row(i), metadata_chunk[i].clone());
+        }
+
+        dpa
+    })
+    .reduce(
+        || Dpa::new(leakages.shape()[1], guess_range, leakage_func),
+        |a, b| a + b,
+    );
+
+    dpa.finalize();
+
+    dpa
+}
+
+pub struct Dpa<M> {
     /// Number of samples per trace
     len_samples: usize,
     /// Guess range upper excluded bound
@@ -21,7 +57,7 @@ pub struct Dpa<T> {
     rank_slice: Array2<f32>,
     rank_traces: usize, // Number of traces to calculate succes rate
     /// Selection function
-    leakage_func: fn(T, usize) -> usize,
+    leakage_func: fn(M, usize) -> usize,
     /// Number of traces processed
     len_leakages: usize,
 }
@@ -30,8 +66,8 @@ pub struct Dpa<T> {
 https://paulkocher.com/doc/DifferentialPowerAnalysis.pdf
 https://web.mit.edu/6.857/OldStuff/Fall03/ref/kocher-DPATechInfo.pdf */
 
-impl<T: Clone> Dpa<T> {
-    pub fn new(size: usize, guess_range: usize, f: fn(T, usize) -> usize) -> Self {
+impl<M: Clone> Dpa<M> {
+    pub fn new(size: usize, guess_range: usize, f: fn(M, usize) -> usize) -> Self {
         Self {
             len_samples: size,
             guess_range,
@@ -50,9 +86,9 @@ impl<T: Clone> Dpa<T> {
 
     /// # Panics
     /// Panic in debug if `trace.shape()[0] != self.len_samples`.
-    pub fn update<U>(&mut self, trace: ArrayView1<U>, metadata: T)
+    pub fn update<T>(&mut self, trace: ArrayView1<T>, metadata: M)
     where
-        U: Into<f32> + Copy,
+        T: Into<f32> + Copy,
     {
         debug_assert_eq!(trace.shape()[0], self.len_samples);
 
@@ -81,9 +117,9 @@ impl<T: Clone> Dpa<T> {
         self.len_leakages += 1;
     }
 
-    pub fn update_success<U>(&mut self, trace_batch: ArrayView1<U>, plaintext_batch: T)
+    pub fn update_success<T>(&mut self, trace_batch: ArrayView1<T>, plaintext_batch: M)
     where
-        U: Into<f32> + Copy,
+        T: Into<f32> + Copy,
     {
         /* This function updates the main arrays of the DPA for the success rate*/
         self.update(trace_batch, plaintext_batch);
@@ -160,7 +196,7 @@ impl<T: Clone> Dpa<T> {
     }
 }
 
-impl<T> Add for Dpa<T> {
+impl<M> Add for Dpa<M> {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
