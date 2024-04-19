@@ -41,7 +41,7 @@ where
     })
     .reduce(
         || Cpa::new(leakages.shape()[1], guess_range, target_byte, leakage_func),
-        |a: Cpa, b| a + b,
+        |a, b| a + b,
     );
 
     cpa.finalize();
