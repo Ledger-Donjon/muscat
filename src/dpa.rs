@@ -10,18 +10,18 @@ pub fn dpa<M, T>(
     guess_range: usize,
     leakage_func: fn(M, usize) -> usize,
     chunk_size: usize,
-) -> Dpa<M>
+) -> Dpa
 where
     T: Into<f32> + Copy + Sync,
     M: Clone + Sync,
 {
-    let mut dpa = zip(
+    zip(
         leakages.axis_chunks_iter(Axis(0), chunk_size),
         metadata.axis_chunks_iter(Axis(0), chunk_size),
     )
     .par_bridge()
     .map(|(leakages_chunk, metadata_chunk)| {
-        let mut dpa = Dpa::new(leakages.shape()[1], guess_range, leakage_func);
+        let mut dpa = DpaProcessor::new(leakages.shape()[1], guess_range, leakage_func);
 
         for i in 0..leakages_chunk.shape()[0] {
             dpa.update(leakages_chunk.row(i), metadata_chunk[i].clone());
@@ -30,16 +30,40 @@ where
         dpa
     })
     .reduce(
-        || Dpa::new(leakages.shape()[1], guess_range, leakage_func),
+        || DpaProcessor::new(leakages.shape()[1], guess_range, leakage_func),
         |a, b| a + b,
-    );
-
-    dpa.finalize();
-
-    dpa
+    )
+    .finalize()
 }
 
-pub struct Dpa<M> {
+pub struct Dpa {
+    /// Guess range upper excluded bound
+    guess_range: usize,
+    corr: Array2<f32>,
+    max_corr: Array1<f32>,
+}
+
+impl Dpa {
+    pub fn pass_corr_array(&self) -> ArrayView2<f32> {
+        self.corr.view()
+    }
+
+    pub fn pass_guess(&self) -> usize {
+        let mut init_value = 0.0;
+        let mut guess = 0;
+
+        for i in 0..self.guess_range {
+            if self.max_corr[i] > init_value {
+                init_value = self.max_corr[i];
+                guess = i;
+            }
+        }
+
+        guess
+    }
+}
+
+pub struct DpaProcessor<M> {
     /// Number of samples per trace
     len_samples: usize,
     /// Guess range upper excluded bound
@@ -52,8 +76,6 @@ pub struct Dpa<M> {
     count_0: Array1<usize>,
     /// Number of traces processed for which the selection function equals 1
     count_1: Array1<usize>,
-    corr: Array2<f32>,
-    max_corr: Array1<f32>,
     rank_slice: Array2<f32>,
     rank_traces: usize, // Number of traces to calculate succes rate
     /// Selection function
@@ -66,7 +88,7 @@ pub struct Dpa<M> {
 https://paulkocher.com/doc/DifferentialPowerAnalysis.pdf
 https://web.mit.edu/6.857/OldStuff/Fall03/ref/kocher-DPATechInfo.pdf */
 
-impl<M: Clone> Dpa<M> {
+impl<M: Clone> DpaProcessor<M> {
     pub fn new(size: usize, guess_range: usize, f: fn(M, usize) -> usize) -> Self {
         Self {
             len_samples: size,
@@ -75,8 +97,6 @@ impl<M: Clone> Dpa<M> {
             sum_1: Array2::zeros((guess_range, size)),
             count_0: Array1::zeros(guess_range),
             count_1: Array1::zeros(guess_range),
-            corr: Array2::zeros((guess_range, size)),
-            max_corr: Array1::zeros(guess_range),
             rank_slice: Array2::zeros((guess_range, 1)),
             rank_traces: 0,
             leakage_func: f,
@@ -125,21 +145,21 @@ impl<M: Clone> Dpa<M> {
         self.update(trace_batch, plaintext_batch);
 
         if self.len_leakages % self.rank_traces == 0 {
-            self.finalize();
+            let dpa = self.finalize();
 
             if self.len_leakages == self.rank_traces {
-                self.rank_slice = self
+                self.rank_slice = dpa
                     .max_corr
                     .clone()
-                    .into_shape((self.max_corr.shape()[0], 1))
+                    .into_shape((dpa.max_corr.shape()[0], 1))
                     .unwrap();
             } else {
                 self.rank_slice = concatenate![
                     Axis(1),
                     self.rank_slice,
-                    self.max_corr
+                    dpa.max_corr
                         .clone()
-                        .into_shape((self.max_corr.shape()[0], 1))
+                        .into_shape((dpa.max_corr.shape()[0], 1))
                         .unwrap()
                 ];
             }
@@ -150,9 +170,8 @@ impl<M: Clone> Dpa<M> {
         self.rank_traces = value;
     }
 
-    pub fn finalize(&mut self) {
-        /* This function finalizes the calculation after
-        feeding all stored acc arrays */
+    pub fn finalize(&mut self) -> Dpa {
+        /* This function finalizes the calculation after feeding all stored acc arrays */
         let mut tmp_avg_0 = Array2::zeros((self.guess_range, self.len_samples));
         let mut tmp_avg_1 = Array2::zeros((self.guess_range, self.len_samples));
 
@@ -162,11 +181,15 @@ impl<M: Clone> Dpa<M> {
             tmp_avg_0.row_mut(row).assign(&tmp_row_0);
             tmp_avg_1.row_mut(row).assign(&tmp_row_1);
         }
-        let diff = tmp_avg_0.clone() - tmp_avg_1;
 
-        self.corr = diff.map(|e| f32::abs(*e));
+        let corr = (tmp_avg_0 - tmp_avg_1).map(|e| f32::abs(*e));
+        let max_corr = max_per_row(corr.view());
 
-        self.max_corr = max_per_row(self.corr.view());
+        Dpa {
+            guess_range: self.guess_range,
+            corr,
+            max_corr,
+        }
     }
 
     pub fn success_traces(&mut self, traces_no: usize) {
@@ -176,27 +199,9 @@ impl<M: Clone> Dpa<M> {
     pub fn pass_rank(&self) -> ArrayView2<f32> {
         self.rank_slice.view()
     }
-
-    pub fn pass_corr_array(&self) -> ArrayView2<f32> {
-        self.corr.view()
-    }
-
-    pub fn pass_guess(&self) -> usize {
-        let mut init_value = 0.0;
-        let mut guess = 0;
-
-        for i in 0..self.guess_range {
-            if self.max_corr[i] > init_value {
-                init_value = self.max_corr[i];
-                guess = i;
-            }
-        }
-
-        guess
-    }
 }
 
-impl<M> Add for Dpa<M> {
+impl<M> Add for DpaProcessor<M> {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
@@ -211,8 +216,6 @@ impl<M> Add for Dpa<M> {
             sum_1: self.sum_1 + rhs.sum_1,
             count_0: self.count_0 + rhs.count_0,
             count_1: self.count_1 + rhs.count_1,
-            corr: self.corr + rhs.corr,
-            max_corr: self.max_corr,
             rank_slice: self.rank_slice,
             rank_traces: self.rank_traces,
             leakage_func: self.leakage_func,

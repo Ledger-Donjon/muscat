@@ -50,7 +50,9 @@ where
 pub struct Cpa {
     /// Guess range upper excluded bound
     guess_range: usize,
+    /// Pearson correlation coefficients
     corr: Array2<f32>,
+    /// Max pearson correlation coefficients
     max_corr: Array1<f32>,
     rank_slice: Array2<f32>,
 }
