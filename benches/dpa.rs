@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use muscat::dpa::{dpa, Dpa};
+use muscat::dpa::{dpa, Dpa, DpaProcessor};
 use muscat::leakage::sbox;
 use ndarray::{Array1, Array2};
 use ndarray_rand::rand::{rngs::StdRng, SeedableRng};
@@ -10,19 +10,17 @@ fn selection_function(metadata: Array1<u8>, guess: usize) -> usize {
     sbox(metadata[1] ^ guess as u8).into()
 }
 
-fn dpa_sequential(leakages: &Array2<f32>, plaintexts: &Array2<u8>) -> Dpa<Array1<u8>> {
-    let mut dpa = Dpa::new(leakages.shape()[1], 256, selection_function);
+fn dpa_sequential(leakages: &Array2<f32>, plaintexts: &Array2<u8>) -> Dpa {
+    let mut dpa = DpaProcessor::new(leakages.shape()[1], 256, selection_function);
 
     for i in 0..leakages.shape()[0] {
         dpa.update(leakages.row(i), plaintexts.row(i).to_owned());
     }
 
-    dpa.finalize();
-
-    dpa
+    dpa.finalize()
 }
 
-fn dpa_parallel(leakages: &Array2<f32>, plaintexts: &Array2<u8>) -> Dpa<Array1<u8>> {
+fn dpa_parallel(leakages: &Array2<f32>, plaintexts: &Array2<u8>) -> Dpa {
     dpa(
         leakages.view(),
         plaintexts

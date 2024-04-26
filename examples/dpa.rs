@@ -1,6 +1,6 @@
 use anyhow::Result;
 use indicatif::ProgressIterator;
-use muscat::dpa::Dpa;
+use muscat::dpa::DpaProcessor;
 use muscat::leakage::sbox;
 use muscat::util::read_array2_from_npy_file;
 use ndarray::{s, Array1, Array2};
@@ -26,7 +26,7 @@ fn dpa() -> Result<()> {
     let leakages: Array2<FormatTraces> = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
     let plaintext: Array2<FormatMetadata> = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
     let len_traces = 20000; //leakages.shape()[0];
-    let mut dpa = Dpa::new(size, guess_range, leakage_model);
+    let mut dpa = DpaProcessor::new(size, guess_range, leakage_model);
     for i in (0..len_traces).progress() {
         let tmp_trace = leakages
             .row(i)
@@ -35,7 +35,7 @@ fn dpa() -> Result<()> {
         let tmp_metadata = plaintext.row(i);
         dpa.update(tmp_trace.view(), tmp_metadata.to_owned());
     }
-    dpa.finalize();
+    let dpa = dpa.finalize();
     println!("Guessed key = {:02x}", dpa.pass_guess());
     // let corr = dpa.pass_corr_array();
 
@@ -54,7 +54,7 @@ fn dpa_success() -> Result<()> {
     let leakages: Array2<FormatTraces> = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
     let plaintext: Array2<FormatMetadata> = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
     let len_traces = leakages.shape()[0];
-    let mut dpa = Dpa::new(size, guess_range, leakage_model);
+    let mut dpa = DpaProcessor::new(size, guess_range, leakage_model);
     let rank_traces: usize = 100;
     dpa.assign_rank_traces(rank_traces);
 
@@ -67,6 +67,7 @@ fn dpa_success() -> Result<()> {
         dpa.update_success(tmp_trace.view(), tmp_metadata);
     }
 
+    let dpa = dpa.finalize();
     println!("Guessed key = {:02x}", dpa.pass_guess());
     // let succss = dpa.pass_rank().to_owned();
 
@@ -96,7 +97,7 @@ fn dpa_parallel() -> Result<()> {
             let tmp_metadata = plaintext
                 .slice(s![range_rows..range_rows + batch, ..])
                 .to_owned();
-            let mut dpa_inner = Dpa::new(size, guess_range, leakage_model);
+            let mut dpa_inner = DpaProcessor::new(size, guess_range, leakage_model);
             for i in 0..batch {
                 let trace = tmp_leakages.row(i);
                 let metadata = tmp_metadata.row(i).to_owned();
@@ -104,9 +105,12 @@ fn dpa_parallel() -> Result<()> {
             }
             dpa_inner
         })
-        .reduce(|| Dpa::new(size, guess_range, leakage_model), |x, y| x + y);
+        .reduce(
+            || DpaProcessor::new(size, guess_range, leakage_model),
+            |x, y| x + y,
+        );
 
-    dpa.finalize();
+    let dpa = dpa.finalize();
     println!("{:2x}", dpa.pass_guess());
     // let corr = dpa.pass_corr_array();
 
