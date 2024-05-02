@@ -4,6 +4,8 @@ use std::{iter::zip, ops::Add};
 
 use crate::util::max_per_row;
 
+/// # Panics
+/// Panics if `chunk_size` is not strictly positive.
 pub fn dpa<M, T>(
     leakages: ArrayView2<T>,
     metadata: ArrayView1<M>,
@@ -15,24 +17,25 @@ where
     T: Into<f32> + Copy + Sync,
     M: Clone + Sync,
 {
+    assert!(chunk_size > 0);
+
     zip(
         leakages.axis_chunks_iter(Axis(0), chunk_size),
         metadata.axis_chunks_iter(Axis(0), chunk_size),
     )
     .par_bridge()
-    .map(|(leakages_chunk, metadata_chunk)| {
-        let mut dpa = DpaProcessor::new(leakages.shape()[1], guess_range, leakage_func);
-
-        for i in 0..leakages_chunk.shape()[0] {
-            dpa.update(leakages_chunk.row(i), metadata_chunk[i].clone());
-        }
-
-        dpa
-    })
-    .reduce(
+    .fold(
         || DpaProcessor::new(leakages.shape()[1], guess_range, leakage_func),
-        |a, b| a + b,
+        |mut dpa, (leakages_chunk, metadata_chunk)| {
+            for i in 0..leakages_chunk.shape()[0] {
+                dpa.update(leakages_chunk.row(i), metadata_chunk[i].clone());
+            }
+
+            dpa
+        },
     )
+    .reduce_with(|a, b| a + b)
+    .unwrap()
     .finalize()
 }
 

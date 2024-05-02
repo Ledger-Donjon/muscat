@@ -97,20 +97,22 @@ where
 {
     assert!(chunk_size > 0);
 
+    // From benchmarks fold + reduce_with is faster than map + reduce/reduce_with and fold + reduce
     leakages
         .axis_chunks_iter(Axis(0), chunk_size)
         .enumerate()
         .par_bridge()
-        .map(|(chunk_idx, leakages_chunk)| {
-            let mut snr = Snr::new(leakages.shape()[1], classes);
-
-            for i in 0..leakages_chunk.shape()[0] {
-                snr.process(leakages_chunk.row(i), get_class(chunk_idx + i));
-            }
-
-            snr
-        })
-        .reduce(|| Snr::new(leakages.shape()[1], classes), |a, b| a + b)
+        .fold(
+            || Snr::new(leakages.shape()[1], classes),
+            |mut snr, (chunk_idx, leakages_chunk)| {
+                for i in 0..leakages_chunk.shape()[0] {
+                    snr.process(leakages_chunk.row(i), get_class(chunk_idx + i));
+                }
+                snr
+            },
+        )
+        .reduce_with(|a, b| a + b)
+        .unwrap()
         .snr()
 }
 
@@ -169,14 +171,14 @@ impl Snr {
 
             let class_sum = self.classes_sum.slice(s![class, ..]);
             for i in 0..size {
-                acc[i] += (class_sum[i] as f64).powf(2.0) / (self.classes_count[class] as f64);
+                acc[i] += (class_sum[i] as f64).powi(2) / (self.classes_count[class] as f64);
             }
         }
 
         let var = self.mean_var.var();
         let mean = self.mean_var.mean();
         // V[E[L|X]]
-        let velx = (acc / self.mean_var.count as f64) - mean.mapv(|x| x.powf(2.0));
+        let velx = (acc / self.mean_var.count as f64) - mean.mapv(|x| x.powi(2));
         1f64 / (var / velx - 1f64)
     }
 }

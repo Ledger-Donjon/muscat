@@ -25,25 +25,24 @@ where
     assert_eq!(leakages.shape()[0], plaintexts.shape()[0]);
     assert!(chunk_size > 0);
 
+    // From benchmarks fold + reduce_with is faster than map + reduce/reduce_with and fold + reduce
     zip(
         leakages.axis_chunks_iter(Axis(0), chunk_size),
         plaintexts.axis_chunks_iter(Axis(0), chunk_size),
     )
     .par_bridge()
-    .map(|(leakages_chunk, plaintexts_chunk)| {
-        let mut cpa =
-            CpaProcessor::new(leakages.shape()[1], guess_range, target_byte, leakage_func);
-
-        for i in 0..leakages_chunk.shape()[0] {
-            cpa.update(leakages_chunk.row(i), plaintexts_chunk.row(i));
-        }
-
-        cpa
-    })
-    .reduce(
+    .fold(
         || CpaProcessor::new(leakages.shape()[1], guess_range, target_byte, leakage_func),
-        |a, b| a + b,
+        |mut cpa, (leakages_chunk, plaintexts_chunk)| {
+            for i in 0..leakages_chunk.shape()[0] {
+                cpa.update(leakages_chunk.row(i), plaintexts_chunk.row(i));
+            }
+
+            cpa
+        },
     )
+    .reduce_with(|a, b| a + b)
+    .unwrap()
     .finalize()
 }
 
