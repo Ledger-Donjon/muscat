@@ -39,7 +39,7 @@ fn rank() -> Result<()> {
                 .par_bridge()
                 .fold(
                     || CpaProcessor::new(size, guess_range, target_byte, leakage_model),
-                    |mut r: CpaProcessor, n| {
+                    |mut r, n| {
                         r.update(
                             l_sample.row(n).map(|l| *l as usize).view(),
                             p_sample.row(n).map(|p| *p as usize).view(),
@@ -58,7 +58,7 @@ fn rank() -> Result<()> {
     let rank = rank.finalize();
 
     // save rank key curves in npy
-    save_array("../results/rank.npy", &rank.pass_rank())?;
+    save_array("../results/rank.npy", &rank.rank().map(|&x| x as u64))?;
 
     Ok(())
 }
