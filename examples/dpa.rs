@@ -10,9 +10,8 @@ use rayon::iter::{ParallelBridge, ParallelIterator};
 type FormatTraces = f64;
 type FormatMetadata = u8;
 
-// leakage model
-pub fn leakage_model(value: Array1<FormatMetadata>, guess: usize) -> usize {
-    (sbox((value[1] as usize ^ guess) as u8)) as usize
+pub fn selection_function(value: Array1<FormatMetadata>, guess: usize) -> bool {
+    (sbox((value[1] as usize ^ guess) as u8)) as usize & 1 == 1
 }
 
 fn dpa() -> Result<()> {
@@ -26,7 +25,7 @@ fn dpa() -> Result<()> {
     let leakages = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
     let plaintext = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
     let len_traces = 20000; //leakages.shape()[0];
-    let mut dpa_proc = DpaProcessor::new(size, guess_range, leakage_model);
+    let mut dpa_proc = DpaProcessor::new(size, guess_range, selection_function);
     for i in (0..len_traces).progress() {
         let tmp_trace = leakages
             .row(i)
@@ -54,7 +53,7 @@ fn dpa_success() -> Result<()> {
     let leakages = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
     let plaintext = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
     let len_traces = leakages.shape()[0];
-    let mut dpa_proc = DpaProcessor::new(size, guess_range, leakage_model);
+    let mut dpa_proc = DpaProcessor::new(size, guess_range, selection_function);
     let rank_traces: usize = 100;
 
     let mut rank = Array1::zeros(guess_range);
@@ -102,7 +101,8 @@ fn dpa_parallel() -> Result<()> {
             let tmp_metadata = plaintext
                 .slice(s![range_rows..range_rows + batch, ..])
                 .to_owned();
-            let mut dpa_inner = DpaProcessor::new(size, guess_range, leakage_model);
+
+            let mut dpa_inner = DpaProcessor::new(size, guess_range, selection_function);
             for i in 0..batch {
                 let trace = tmp_leakages.row(i);
                 let metadata = tmp_metadata.row(i).to_owned();
@@ -111,7 +111,7 @@ fn dpa_parallel() -> Result<()> {
             dpa_inner
         })
         .reduce(
-            || DpaProcessor::new(size, guess_range, leakage_model),
+            || DpaProcessor::new(size, guess_range, selection_function),
             |x, y| x + y,
         )
         .finalize();
