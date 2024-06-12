@@ -6,8 +6,8 @@ use ndarray_rand::rand::{rngs::StdRng, SeedableRng};
 use ndarray_rand::rand_distr::Uniform;
 use ndarray_rand::RandomExt;
 
-fn selection_function(metadata: Array1<u8>, guess: usize) -> usize {
-    sbox(metadata[1] ^ guess as u8).into()
+fn selection_function(metadata: Array1<u8>, guess: usize) -> bool {
+    usize::from(sbox(metadata[1] ^ guess as u8)) & 1 == 1
 }
 
 fn dpa_sequential(leakages: &Array2<f32>, plaintexts: &Array2<u8>) -> Dpa {

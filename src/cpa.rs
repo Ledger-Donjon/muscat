@@ -11,16 +11,17 @@ use std::{iter::zip, ops::Add};
 /// # Panics
 /// - Panic if `leakages.shape()[0] != plaintexts.shape()[0]`
 /// - Panic if `chunk_size` is 0.
-pub fn cpa<T>(
+pub fn cpa<T, F>(
     leakages: ArrayView2<T>,
     plaintexts: ArrayView2<T>,
     guess_range: usize,
     target_byte: usize,
-    leakage_func: fn(usize, usize) -> usize,
+    leakage_func: F,
     chunk_size: usize,
 ) -> Cpa
 where
     T: Into<usize> + Copy + Sync,
+    F: Fn(usize, usize) -> usize + Send + Sync + Copy,
 {
     assert_eq!(leakages.shape()[0], plaintexts.shape()[0]);
     assert!(chunk_size > 0);
@@ -87,7 +88,10 @@ impl Cpa {
 /// A processor that computes the [`Cpa`] of the given traces.
 ///
 /// It implements Algorithm 4 of https://eprint.iacr.org/2013/794.pdf
-pub struct CpaProcessor {
+pub struct CpaProcessor<F>
+where
+    F: Fn(usize, usize) -> usize,
+{
     /// Number of samples per trace
     num_samples: usize,
     target_byte: usize,
@@ -105,17 +109,20 @@ pub struct CpaProcessor {
     /// See 4.3 in https://eprint.iacr.org/2013/794.pdf
     plaintext_sum_leakages: Array2<usize>,
     /// Leakage model
-    leakage_func: fn(usize, usize) -> usize,
+    leakage_func: F,
     /// Number of traces processed
     num_traces: usize,
 }
 
-impl CpaProcessor {
+impl<F> CpaProcessor<F>
+where
+    F: Fn(usize, usize) -> usize + Sync,
+{
     pub fn new(
         num_samples: usize,
         guess_range: usize,
         target_byte: usize,
-        leakage_func: fn(usize, usize) -> usize,
+        leakage_func: F,
     ) -> Self {
         Self {
             num_samples,
@@ -206,14 +213,18 @@ impl CpaProcessor {
     }
 }
 
-impl Add for CpaProcessor {
+impl<F> Add for CpaProcessor<F>
+where
+    F: Fn(usize, usize) -> usize,
+{
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
         debug_assert_eq!(self.target_byte, rhs.target_byte);
         debug_assert_eq!(self.guess_range, rhs.guess_range);
         debug_assert_eq!(self.num_samples, rhs.num_samples);
-        debug_assert_eq!(self.leakage_func, rhs.leakage_func);
+
+        // WARN: `self.leakage_func` and `rhs.leakage_func` must be the same function
 
         Self {
             num_samples: self.num_samples,

@@ -1,21 +1,22 @@
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
 use rayon::iter::{ParallelBridge, ParallelIterator};
-use std::{iter::zip, ops::Add};
+use std::{iter::zip, marker::PhantomData, ops::Add};
 
 use crate::util::{argsort_by, max_per_row};
 
 /// # Panics
 /// Panics if `chunk_size` is not strictly positive.
-pub fn dpa<M, T>(
+pub fn dpa<M, T, F>(
     leakages: ArrayView2<T>,
     metadata: ArrayView1<M>,
     guess_range: usize,
-    leakage_func: fn(M, usize) -> usize,
+    selection_function: F,
     chunk_size: usize,
 ) -> Dpa
 where
     T: Into<f32> + Copy + Sync,
-    M: Clone + Sync,
+    M: Clone + Send + Sync,
+    F: Fn(M, usize) -> bool + Send + Sync + Copy,
 {
     assert!(chunk_size > 0);
 
@@ -25,7 +26,7 @@ where
     )
     .par_bridge()
     .fold(
-        || DpaProcessor::new(leakages.shape()[1], guess_range, leakage_func),
+        || DpaProcessor::new(leakages.shape()[1], guess_range, selection_function),
         |mut dpa, (leakages_chunk, metadata_chunk)| {
             for i in 0..leakages_chunk.shape()[0] {
                 dpa.update(leakages_chunk.row(i), metadata_chunk[i].clone());
@@ -81,34 +82,34 @@ impl Dpa {
 /// It implements algorithm from:
 /// https://paulkocher.com/doc/DifferentialPowerAnalysis.pdf
 /// https://web.mit.edu/6.857/OldStuff/Fall03/ref/kocher-DPATechInfo.pdf
-pub struct DpaProcessor<M> {
+pub struct DpaProcessor<M, F>
+where
+    F: Fn(M, usize) -> bool,
+{
     /// Number of samples per trace
     num_samples: usize,
     /// Guess range upper excluded bound
     guess_range: usize,
-    /// Sum of traces for which the selection function equals 0
+    /// Sum of traces for which the selection function equals false
     sum_0: Array2<f32>,
-    /// Sum of traces for which the selection function equals 1
+    /// Sum of traces for which the selection function equals true
     sum_1: Array2<f32>,
-    /// Number of traces processed for which the selection function equals 0
+    /// Number of traces processed for which the selection function equals false
     count_0: Array1<usize>,
-    /// Number of traces processed for which the selection function equals 1
+    /// Number of traces processed for which the selection function equals true
     count_1: Array1<usize>,
-    /// Selection function
-    leakage_func: fn(M, usize) -> usize,
+    selection_function: F,
     /// Number of traces processed
     num_traces: usize,
+    _metadata: PhantomData<M>,
 }
 
-impl<M> DpaProcessor<M>
+impl<M, F> DpaProcessor<M, F>
 where
     M: Clone,
+    F: Fn(M, usize) -> bool,
 {
-    pub fn new(
-        num_samples: usize,
-        guess_range: usize,
-        selection_function: fn(M, usize) -> usize,
-    ) -> Self {
+    pub fn new(num_samples: usize, guess_range: usize, selection_function: F) -> Self {
         Self {
             num_samples,
             guess_range,
@@ -116,8 +117,9 @@ where
             sum_1: Array2::zeros((guess_range, num_samples)),
             count_0: Array1::zeros(guess_range),
             count_1: Array1::zeros(guess_range),
-            leakage_func: selection_function,
+            selection_function,
             num_traces: 0,
+            _metadata: PhantomData,
         }
     }
 
@@ -130,8 +132,7 @@ where
         debug_assert_eq!(trace.shape()[0], self.num_samples);
 
         for guess in 0..self.guess_range {
-            let index = (self.leakage_func)(metadata.clone(), guess);
-            if index & 1 == 1 {
+            if (self.selection_function)(metadata.clone(), guess) {
                 for i in 0..self.num_samples {
                     self.sum_1[[guess, i]] += trace[i].into();
                 }
@@ -166,13 +167,17 @@ where
     }
 }
 
-impl<M> Add for DpaProcessor<M> {
+impl<M, F> Add for DpaProcessor<M, F>
+where
+    F: Fn(M, usize) -> bool,
+{
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
         debug_assert_eq!(self.num_samples, rhs.num_samples);
         debug_assert_eq!(self.guess_range, rhs.guess_range);
-        debug_assert_eq!(self.leakage_func, rhs.leakage_func);
+
+        // WARN: `self.selection_function` and `rhs.selection_function` must be the same function
 
         Self {
             num_samples: self.num_samples,
@@ -181,8 +186,9 @@ impl<M> Add for DpaProcessor<M> {
             sum_1: self.sum_1 + rhs.sum_1,
             count_0: self.count_0 + rhs.count_0,
             count_1: self.count_1 + rhs.count_1,
-            leakage_func: self.leakage_func,
+            selection_function: self.selection_function,
             num_traces: self.num_traces + rhs.num_traces,
+            _metadata: PhantomData,
         }
     }
 }

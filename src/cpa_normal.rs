@@ -9,16 +9,17 @@ use crate::util::{argsort_by, max_per_row};
 /// # Panics
 /// - Panic if `leakages.shape()[0] != plaintexts.shape()[0]`
 /// - Panic if `chunk_size` is 0.
-pub fn cpa<T, U>(
+pub fn cpa<T, U, F>(
     leakages: ArrayView2<T>,
     plaintexts: ArrayView2<U>,
     guess_range: usize,
-    leakage_func: fn(ArrayView1<usize>, usize) -> usize,
+    leakage_func: F,
     chunk_size: usize,
 ) -> Cpa
 where
     T: Into<f32> + Copy + Sync,
     U: Into<usize> + Copy + Sync,
+    F: Fn(ArrayView1<usize>, usize) -> usize + Send + Sync + Copy,
 {
     assert_eq!(leakages.shape()[0], plaintexts.shape()[0]);
     assert!(chunk_size > 0);
@@ -80,7 +81,10 @@ impl Cpa {
     }
 }
 
-pub struct CpaProcessor {
+pub struct CpaProcessor<F>
+where
+    F: Fn(ArrayView1<usize>, usize) -> usize,
+{
     /// Number of samples per trace
     num_samples: usize,
     /// Guess range upper excluded bound
@@ -98,7 +102,7 @@ pub struct CpaProcessor {
     /// Batch size
     batch_size: usize,
     /// Leakage model
-    leakage_func: fn(ArrayView1<usize>, usize) -> usize,
+    leakage_func: F,
     /// Number of traces processed
     num_traces: usize,
 }
@@ -106,13 +110,11 @@ pub struct CpaProcessor {
 /* This class implements the CPA algorithm shown in:
 https://www.iacr.org/archive/ches2004/31560016/31560016.pdf */
 
-impl CpaProcessor {
-    pub fn new(
-        num_samples: usize,
-        batch_size: usize,
-        guess_range: usize,
-        leakage_func: fn(ArrayView1<usize>, usize) -> usize,
-    ) -> Self {
+impl<F> CpaProcessor<F>
+where
+    F: Fn(ArrayView1<usize>, usize) -> usize,
+{
+    pub fn new(num_samples: usize, batch_size: usize, guess_range: usize, leakage_func: F) -> Self {
         Self {
             num_samples,
             guess_range,
@@ -210,13 +212,18 @@ impl CpaProcessor {
     }
 }
 
-impl Add for CpaProcessor {
+impl<F> Add for CpaProcessor<F>
+where
+    F: Fn(ArrayView1<usize>, usize) -> usize,
+{
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
         debug_assert_eq!(self.num_samples, rhs.num_samples);
         debug_assert_eq!(self.batch_size, rhs.batch_size);
         debug_assert_eq!(self.guess_range, rhs.guess_range);
+
+        // WARN: `self.leakage_func` and `rhs.leakage_func` must be the same function
 
         Self {
             num_samples: self.num_samples,
