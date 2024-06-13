@@ -29,7 +29,7 @@ pub fn leakage_model_normal(value: ArrayView1<usize>, guess: usize) -> usize {
     hw(sbox((value[1] ^ guess) as u8) as usize)
 }
 
-fn cpa_normal_sequential(leakages: &Array2<f64>, plaintexts: &Array2<u8>) -> cpa_normal::Cpa {
+fn cpa_normal_sequential(leakages: &Array2<f64>, plaintexts: &Array2<u8>) -> Cpa {
     let chunk_size = 500;
 
     let mut cpa =

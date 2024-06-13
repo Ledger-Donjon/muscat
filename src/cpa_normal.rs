@@ -2,7 +2,7 @@ use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use std::{iter::zip, ops::Add};
 
-use crate::util::{argsort_by, max_per_row};
+use crate::cpa::Cpa;
 
 /// Computes the [`Cpa`] of the given traces using [`CpaProcessor`].
 ///
@@ -40,45 +40,6 @@ where
     .reduce_with(|x, y| x + y)
     .unwrap()
     .finalize()
-}
-
-pub struct Cpa {
-    /// Guess range upper excluded bound
-    guess_range: usize,
-    /// Pearson correlation coefficients
-    corr: Array2<f32>,
-}
-
-impl Cpa {
-    pub fn rank(&self) -> Array1<usize> {
-        let rank = argsort_by(&self.max_corr().to_vec()[..], f32::total_cmp);
-
-        Array1::from_vec(rank)
-    }
-
-    pub fn corr(&self) -> ArrayView2<f32> {
-        self.corr.view()
-    }
-
-    pub fn best_guess(&self) -> usize {
-        let max_corr = self.max_corr();
-
-        let mut best_guess_corr = 0.0;
-        let mut best_guess = 0;
-
-        for guess in 0..self.guess_range {
-            if max_corr[guess] > best_guess_corr {
-                best_guess_corr = max_corr[guess];
-                best_guess = guess;
-            }
-        }
-
-        best_guess
-    }
-
-    pub fn max_corr(&self) -> Array1<f32> {
-        max_per_row(self.corr.view())
-    }
 }
 
 pub struct CpaProcessor<F>
