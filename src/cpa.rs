@@ -47,11 +47,12 @@ where
     .finalize()
 }
 
+#[derive(Debug)]
 pub struct Cpa {
     /// Guess range upper excluded bound
-    guess_range: usize,
+    pub(crate) guess_range: usize,
     /// Pearson correlation coefficients
-    corr: Array2<f32>,
+    pub(crate) corr: Array2<f32>,
 }
 
 impl Cpa {
