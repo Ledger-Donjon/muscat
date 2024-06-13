@@ -40,6 +40,7 @@ where
     .finalize()
 }
 
+#[derive(Debug)]
 pub struct Dpa {
     /// Guess range upper excluded bound
     guess_range: usize,
