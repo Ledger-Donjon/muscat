@@ -49,7 +49,7 @@ impl MeanVar {
     pub fn mean(&self) -> Array1<f64> {
         let count = self.count as f64;
 
-        self.sum.map(|&x| x as f64 / count)
+        self.sum.mapv(|x| x as f64 / count)
     }
 
     /// Calculates and returns traces variance.
