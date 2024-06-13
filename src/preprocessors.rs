@@ -50,7 +50,7 @@ impl CenteredProduct {
     /// Compute the mean
     pub fn finalize(&mut self) {
         if self.count != 0 {
-            self.mean = self.acc.map(|&x| x as f64 / self.count as f64)
+            self.mean = self.acc.mapv(|x| x as f64 / self.count as f64)
         }
         self.processed = true
     }
@@ -203,7 +203,7 @@ mod tests {
 
         for (i, t) in traces.iter().enumerate() {
             assert_eq!(
-                processor2.apply(t.view()).map(|x| round_to_2_digits(*x)),
+                processor2.apply(t.view()).mapv(round_to_2_digits),
                 expected_results[i]
             );
         }
@@ -231,15 +231,15 @@ mod tests {
         ];
 
         assert_eq!(
-            processor1.process(t.view()).map(|x| round_to_2_digits(*x)),
+            processor1.process(t.view()).mapv(round_to_2_digits),
             expected_results[0]
         );
         assert_eq!(
-            processor2.process(t.view()).map(|x| round_to_2_digits(*x)),
+            processor2.process(t.view()).mapv(round_to_2_digits),
             expected_results[1]
         );
         assert_eq!(
-            processor3.process(t.view()).map(|x| round_to_2_digits(*x)),
+            processor3.process(t.view()).mapv(round_to_2_digits),
             expected_results[2]
         );
     }
@@ -280,7 +280,7 @@ mod tests {
 
         for (i, t) in traces.iter().enumerate() {
             assert_eq!(
-                processor.apply(t.view()).map(|x| round_to_2_digits(*x)),
+                processor.apply(t.view()).mapv(round_to_2_digits),
                 expected_results[i]
             );
         }

@@ -104,8 +104,8 @@ where
 
         /* This function updates the internal arrays of the CPA
         It accepts trace_batch and plaintext_batch to update them*/
-        let trace_batch = trace_batch.map(|&t| t.into());
-        let plaintext_batch = plaintext_batch.map(|&m| m.into());
+        let trace_batch = trace_batch.mapv(|t| t.into());
+        let plaintext_batch = plaintext_batch.mapv(|m| m.into());
 
         self.update_values(trace_batch.view(), plaintext_batch.view(), self.guess_range);
         self.update_key_leakages(trace_batch.view(), self.guess_range);
