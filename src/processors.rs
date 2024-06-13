@@ -4,7 +4,7 @@ use rayon::iter::{ParallelBridge, ParallelIterator};
 use std::{iter::zip, ops::Add};
 
 /// Processes traces to calculate mean and variance.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct MeanVar {
     /// Sum of traces
     sum: Array1<i64>,
@@ -117,7 +117,7 @@ where
 }
 
 /// Processes traces to calculate the Signal-to-Noise Ratio.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Snr {
     mean_var: MeanVar,
     /// Sum of traces per class
@@ -196,6 +196,7 @@ impl Add for Snr {
 }
 
 /// Processes traces to calculate Welch's T-Test.
+#[derive(Debug)]
 pub struct TTest {
     mean_var_1: MeanVar,
     mean_var_2: MeanVar,

@@ -6,6 +6,7 @@ use crate::processors::MeanVar;
 
 /// Computes the centered product of "order" leakage samples
 /// Used particularly when performing high-order SCA
+#[derive(Debug)]
 pub struct CenteredProduct {
     /// Sum of traces
     acc: Array1<i64>,
@@ -79,6 +80,7 @@ impl CenteredProduct {
 }
 
 /// Elevates parts of a trace to a certain power
+#[derive(Debug)]
 pub struct Power {
     intervals: Vec<Range<i32>>,
     power: i32,
@@ -110,6 +112,7 @@ impl Power {
 }
 
 /// Standardization of the traces by removing the mean and scaling to unit variance
+#[derive(Debug)]
 pub struct StandardScaler {
     /// meanVar processor
     meanvar: MeanVar,
