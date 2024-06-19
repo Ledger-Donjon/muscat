@@ -4,7 +4,7 @@ use std::{iter::zip, ops::Add};
 
 use crate::cpa::Cpa;
 
-/// Computes the [`Cpa`] of the given traces using [`CpaProcessor`].
+/// Compute the [`Cpa`] of the given traces using [`CpaProcessor`].
 ///
 /// # Panics
 /// - Panic if `leakages.shape()[0] != plaintexts.shape()[0]`
@@ -42,6 +42,9 @@ where
     .finalize()
 }
 
+/// A processor that computes the [`Cpa`] of the given traces.
+///
+/// [^1]: <https://www.iacr.org/archive/ches2004/31560016/31560016.pdf>
 pub struct CpaProcessor<F>
 where
     F: Fn(ArrayView1<usize>, usize) -> usize,
@@ -67,9 +70,6 @@ where
     /// Number of traces processed
     num_traces: usize,
 }
-
-/* This class implements the CPA algorithm shown in:
-https://www.iacr.org/archive/ches2004/31560016/31560016.pdf */
 
 impl<F> CpaProcessor<F>
 where
@@ -144,7 +144,7 @@ where
         }
     }
 
-    /// Finalizes the calculation after feeding the overall traces.
+    /// Finalize the calculation after feeding the overall traces.
     pub fn finalize(&self) -> Cpa {
         let cov_n = self.cov.clone() / self.num_traces as f32;
         let avg_keys = self.guess_sum_leakages.clone() / self.num_traces as f32;

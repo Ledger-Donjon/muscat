@@ -4,8 +4,10 @@ use std::{iter::zip, marker::PhantomData, ops::Add};
 
 use crate::util::{argsort_by, max_per_row};
 
+/// Compute the [`Dpa`] of the given traces using [`DpaProcessor`].
+///
 /// # Panics
-/// Panics if `chunk_size` is not strictly positive.
+/// Panic if `chunk_size` is not strictly positive.
 pub fn dpa<M, T, F>(
     leakages: ArrayView2<T>,
     metadata: ArrayView1<M>,
@@ -40,6 +42,9 @@ where
     .finalize()
 }
 
+/// Result of the DPA[^1] on some traces.
+///
+/// [^1]: <https://paulkocher.com/doc/DifferentialPowerAnalysis.pdf>
 #[derive(Debug)]
 pub struct Dpa {
     /// Guess range upper excluded bound
@@ -48,16 +53,19 @@ pub struct Dpa {
 }
 
 impl Dpa {
+    /// Return the rank of guesses
     pub fn rank(&self) -> Array1<usize> {
         let rank = argsort_by(&self.max_differential_curves().to_vec()[..], f32::total_cmp);
 
         Array1::from_vec(rank)
     }
 
+    /// Return the differential curves
     pub fn differential_curves(&self) -> ArrayView2<f32> {
         self.differential_curves.view()
     }
 
+    /// Return the guess with the highest differential peak.
     pub fn best_guess(&self) -> usize {
         let max_corr = self.max_differential_curves();
 
@@ -73,6 +81,7 @@ impl Dpa {
         best_guess
     }
 
+    /// Return the maximum differential peak for each guess.
     pub fn max_differential_curves(&self) -> Array1<f32> {
         max_per_row(self.differential_curves.view())
     }
@@ -80,9 +89,8 @@ impl Dpa {
 
 /// A processor that computes the [`Dpa`] of the given traces.
 ///
-/// It implements algorithm from:
-/// https://paulkocher.com/doc/DifferentialPowerAnalysis.pdf
-/// https://web.mit.edu/6.857/OldStuff/Fall03/ref/kocher-DPATechInfo.pdf
+/// [^1]: <https://paulkocher.com/doc/DifferentialPowerAnalysis.pdf>
+/// [^2]: <https://web.mit.edu/6.857/OldStuff/Fall03/ref/kocher-DPATechInfo.pdf>
 pub struct DpaProcessor<M, F>
 where
     F: Fn(M, usize) -> bool,

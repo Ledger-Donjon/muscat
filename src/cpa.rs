@@ -6,7 +6,7 @@ use rayon::{
 };
 use std::{iter::zip, ops::Add};
 
-/// Computes the [`Cpa`] of the given traces using [`CpaProcessor`].
+/// Compute the [`Cpa`] of the given traces using [`CpaProcessor`].
 ///
 /// # Panics
 /// - Panic if `leakages.shape()[0] != plaintexts.shape()[0]`
@@ -47,6 +47,9 @@ where
     .finalize()
 }
 
+/// Result of the CPA[^1] on some traces.
+///
+/// [^1]: <https://www.iacr.org/archive/ches2004/31560016/31560016.pdf>
 #[derive(Debug)]
 pub struct Cpa {
     /// Guess range upper excluded bound
@@ -56,16 +59,19 @@ pub struct Cpa {
 }
 
 impl Cpa {
+    /// Rank guesses.
     pub fn rank(&self) -> Array1<usize> {
         let rank = argsort_by(&self.max_corr().to_vec()[..], f32::total_cmp);
 
         Array1::from_vec(rank)
     }
 
+    /// Return the Pearson correlation coefficients.
     pub fn corr(&self) -> ArrayView2<f32> {
         self.corr.view()
     }
 
+    /// Return the guess with the highest Pearson correlation coefficient.
     pub fn best_guess(&self) -> usize {
         let max_corr = self.max_corr();
 
@@ -81,6 +87,7 @@ impl Cpa {
         best_guess
     }
 
+    /// Return the maximum Pearson correlation coefficient for each guess.
     pub fn max_corr(&self) -> Array1<f32> {
         max_per_row(self.corr.view())
     }
@@ -88,7 +95,9 @@ impl Cpa {
 
 /// A processor that computes the [`Cpa`] of the given traces.
 ///
-/// It implements Algorithm 4 of https://eprint.iacr.org/2013/794.pdf
+/// It implements algorithm 4 from [^1].
+///
+/// [^1]: <https://eprint.iacr.org/2013/794.pdf>
 pub struct CpaProcessor<F>
 where
     F: Fn(usize, usize) -> usize,
@@ -108,7 +117,7 @@ where
     /// Sum of square of traces per key guess
     guess_sum_squares_leakages: Array1<usize>,
     /// Sum of traces per plaintext used
-    /// See 4.3 in https://eprint.iacr.org/2013/794.pdf
+    /// See 4.3 in <https://eprint.iacr.org/2013/794.pdf>
     plaintext_sum_leakages: Array2<usize>,
     /// Leakage model
     leakage_func: F,
@@ -165,7 +174,7 @@ where
         self.num_traces += 1;
     }
 
-    /// Finalizes the calculation after feeding the overall traces.
+    /// Finalize the calculation after feeding the overall traces.
     pub fn finalize(&self) -> Cpa {
         let mut modeled_leakages = Array1::zeros(self.guess_range);
 
