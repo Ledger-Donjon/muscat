@@ -2,7 +2,7 @@ use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use std::{iter::zip, marker::PhantomData, ops::Add};
 
-use crate::util::{argsort_by, max_per_row};
+use crate::util::{argmax_by, argsort_by, max_per_row};
 
 /// Compute the [`Dpa`] of the given traces using [`DpaProcessor`].
 ///
@@ -47,8 +47,6 @@ where
 /// [^1]: <https://paulkocher.com/doc/DifferentialPowerAnalysis.pdf>
 #[derive(Debug)]
 pub struct Dpa {
-    /// Guess range upper excluded bound
-    guess_range: usize,
     differential_curves: Array2<f32>,
 }
 
@@ -67,18 +65,7 @@ impl Dpa {
 
     /// Return the guess with the highest differential peak.
     pub fn best_guess(&self) -> usize {
-        let max_corr = self.max_differential_curves();
-
-        let mut best_guess_value = 0.0;
-        let mut best_guess = 0;
-        for guess in 0..self.guess_range {
-            if max_corr[guess] > best_guess_value {
-                best_guess_value = max_corr[guess];
-                best_guess = guess;
-            }
-        }
-
-        best_guess
+        argmax_by(self.max_differential_curves().view(), f32::total_cmp)
     }
 
     /// Return the maximum differential peak for each guess.
@@ -170,7 +157,6 @@ where
         }
 
         Dpa {
-            guess_range: self.guess_range,
             differential_curves,
         }
     }

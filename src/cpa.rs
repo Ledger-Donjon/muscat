@@ -1,4 +1,4 @@
-use crate::util::{argsort_by, max_per_row};
+use crate::util::{argmax_by, argsort_by, max_per_row};
 use ndarray::{s, Array1, Array2, ArrayView1, ArrayView2, Axis};
 use rayon::{
     iter::ParallelBridge,
@@ -52,8 +52,6 @@ where
 /// [^1]: <https://www.iacr.org/archive/ches2004/31560016/31560016.pdf>
 #[derive(Debug)]
 pub struct Cpa {
-    /// Guess range upper excluded bound
-    pub(crate) guess_range: usize,
     /// Pearson correlation coefficients
     pub(crate) corr: Array2<f32>,
 }
@@ -73,18 +71,7 @@ impl Cpa {
 
     /// Return the guess with the highest Pearson correlation coefficient.
     pub fn best_guess(&self) -> usize {
-        let max_corr = self.max_corr();
-
-        let mut best_guess_corr = 0.0;
-        let mut best_guess = 0;
-        for guess in 0..self.guess_range {
-            if max_corr[guess] > best_guess_corr {
-                best_guess_corr = max_corr[guess];
-                best_guess = guess;
-            }
-        }
-
-        best_guess
+        argmax_by(self.max_corr().view(), f32::total_cmp)
     }
 
     /// Return the maximum Pearson correlation coefficient for each guess.
@@ -213,10 +200,7 @@ where
             }
         }
 
-        Cpa {
-            guess_range: self.guess_range,
-            corr,
-        }
+        Cpa { corr }
     }
 
     fn sum_mult(&self, a: ArrayView1<usize>, b: ArrayView1<usize>) -> usize {
