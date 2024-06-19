@@ -33,7 +33,7 @@ impl MeanVar {
     /// # Panics
     /// Panics in debug if the length of the trace is different form the size of [`MeanVar`].
     pub fn process<T: Into<i64> + Copy>(&mut self, trace: ArrayView1<T>) {
-        debug_assert!(trace.len() == self.sum.len());
+        debug_assert!(trace.len() == self.size());
 
         for i in 0..self.sum.len() {
             let x = trace[i].into();
@@ -61,16 +61,36 @@ impl MeanVar {
             .collect()
     }
 
+    /// Returns the trace size handled.
+    pub fn size(&self) -> usize {
+        self.sum.len()
+    }
+
     /// Returns the number of traces processed.
     pub fn count(&self) -> usize {
         self.count
+    }
+
+    /// Determine if two [`MeanVar`] are compatible for addition.
+    ///
+    /// If they were created with the same parameters, they are compatible.
+    fn is_compatible_with(&self, other: &Self) -> bool {
+        self.size() == other.size()
     }
 }
 
 impl Add for MeanVar {
     type Output = Self;
 
+    /// Merge computations of two [`MeanVar`]. Processors need to be compatible to be merged
+    /// together, otherwise it can panic or yield incoherent result (see
+    /// [`MeanVar::is_compatible_with`]).
+    ///
+    /// # Panics
+    /// Panics in debug if the processors are not compatible.
     fn add(self, rhs: Self) -> Self::Output {
+        debug_assert!(self.is_compatible_with(&rhs));
+
         Self {
             sum: self.sum + rhs.sum,
             sum_squares: self.sum_squares + rhs.sum_squares,
@@ -133,11 +153,11 @@ impl Snr {
     ///
     /// * `size` - Size of the input traces
     /// * `classes` - Number of classes
-    pub fn new(size: usize, classes: usize) -> Self {
+    pub fn new(size: usize, num_classes: usize) -> Self {
         Self {
             mean_var: MeanVar::new(size),
-            classes_sum: Array2::zeros((classes, size)),
-            classes_count: Array1::zeros(classes),
+            classes_sum: Array2::zeros((num_classes, size)),
+            classes_count: Array1::zeros(num_classes),
         }
     }
 
@@ -146,11 +166,11 @@ impl Snr {
     /// # Panics
     /// Panics in debug if the length of the trace is different from the size of [`Snr`].
     pub fn process<T: Into<i64> + Copy>(&mut self, trace: ArrayView1<T>, class: usize) {
-        debug_assert!(trace.len() == self.classes_sum.shape()[1]);
+        debug_assert!(trace.len() == self.size());
 
         self.mean_var.process(trace);
 
-        for i in 0..self.classes_sum.shape()[1] {
+        for i in 0..self.size() {
             self.classes_sum[[class, i]] += trace[i].into();
         }
 
@@ -160,11 +180,11 @@ impl Snr {
     /// Returns Signal-to-Noise Ratio of the traces.
     /// SNR = V[E[L|X]] / E[V[L|X]]
     pub fn snr(&self) -> Array1<f64> {
-        let size = self.classes_sum.shape()[1];
-        let classes = self.classes_sum.shape()[0];
+        let size = self.size();
+        let num_classes = self.num_classes();
 
         let mut acc: Array1<f64> = Array1::zeros(size);
-        for class in 0..classes {
+        for class in 0..num_classes {
             if self.classes_count[class] == 0 {
                 continue;
             }
@@ -181,12 +201,37 @@ impl Snr {
         let velx = (acc / self.mean_var.count as f64) - mean.mapv(|x| x.powi(2));
         1f64 / (var / velx - 1f64)
     }
+
+    /// Returns the trace size handled
+    pub fn size(&self) -> usize {
+        self.classes_sum.shape()[1]
+    }
+
+    /// Returns the number of classes handled.
+    pub fn num_classes(&self) -> usize {
+        self.classes_count.len()
+    }
+
+    /// Determine if two [`Snr`] are compatible for addition.
+    ///
+    /// If they were created with the same parameters, they are compatible.
+    fn is_compatible_with(&self, other: &Self) -> bool {
+        self.size() == other.size() && self.num_classes() == other.num_classes()
+    }
 }
 
 impl Add for Snr {
     type Output = Self;
 
+    /// Merge computations of two [`Snr`]. Processors need to be compatible to be merged
+    /// together, otherwise it can panic or yield incoherent result (see
+    /// [`Snr::is_compatible_with`]).
+    ///
+    /// # Panics
+    /// Panics in debug if the processors are not compatible.
     fn add(self, rhs: Self) -> Self::Output {
+        debug_assert!(self.is_compatible_with(&rhs));
+
         Self {
             mean_var: self.mean_var + rhs.mean_var,
             classes_sum: self.classes_sum + rhs.classes_sum,
@@ -223,9 +268,9 @@ impl TTest {
     /// * `class` - Indicates to which of the two partitions the given trace belongs.
     ///
     /// # Panics
-    /// Panics in debug if `trace.len() != self.mean_var_1.sum.len()`.
+    /// Panics in debug if `trace.len() != self.size()`.
     pub fn process<T: Into<i64> + Copy>(&mut self, trace: ArrayView1<T>, class: bool) {
-        debug_assert!(trace.len() == self.mean_var_1.sum.len());
+        debug_assert!(trace.len() == self.size());
 
         if class {
             self.mean_var_2.process(trace);
@@ -245,12 +290,32 @@ impl TTest {
             .mapv(f64::sqrt);
         q / d
     }
+
+    /// Returns the trace size handled.
+    pub fn size(&self) -> usize {
+        self.mean_var_1.size()
+    }
+
+    /// Determine if two [`TTest`] are compatible for addition.
+    ///
+    /// If they were created with the same parameters, they are compatible.
+    fn is_compatible_with(&self, other: &Self) -> bool {
+        self.size() == other.size()
+    }
 }
 
 impl Add for TTest {
     type Output = Self;
 
+    /// Merge computations of two [`TTest`]. Processors need to be compatible to be merged
+    /// together, otherwise it can panic or yield incoherent result (see
+    /// [`TTest::is_compatible_with`]).
+    ///
+    /// # Panics
+    /// Panics in debug if the processors are not compatible.
     fn add(self, rhs: Self) -> Self::Output {
+        debug_assert!(self.is_compatible_with(&rhs));
+
         Self {
             mean_var_1: self.mean_var_1 + rhs.mean_var_1,
             mean_var_2: self.mean_var_2 + rhs.mean_var_2,

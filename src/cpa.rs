@@ -95,6 +95,7 @@ where
 {
     /// Number of samples per trace
     num_samples: usize,
+    /// Target byte index in a block
     target_byte: usize,
     /// Guess range upper excluded bound
     guess_range: usize,
@@ -212,20 +213,34 @@ where
     fn sum_mult(&self, a: ArrayView1<usize>, b: ArrayView1<usize>) -> usize {
         a.dot(&b)
     }
+
+    /// Determine if two [`CpaProcessor`] are compatible for addition.
+    ///
+    /// If they were created with the same parameters, they are compatible.
+    ///
+    /// Note: [`CpaProcessor::leakage_func`] cannot be checked for equality, but they must have the
+    /// same leakage functions in order to be compatible.
+    fn is_compatible_with(&self, other: &Self) -> bool {
+        self.num_samples == other.num_samples
+            && self.target_byte == other.target_byte
+            && self.guess_range == other.guess_range
+    }
 }
 
 impl<F> Add for CpaProcessor<F>
 where
-    F: Fn(usize, usize) -> usize,
+    F: Fn(usize, usize) -> usize + Sync,
 {
     type Output = Self;
 
+    /// Merge computations of two [`CpaProcessor`]. Processors need to be compatible to be merged
+    /// together, otherwise it can panic or yield incoherent result (see
+    /// [`CpaProcessor::is_compatible_with`]).
+    ///
+    /// # Panics
+    /// Panics in debug if the processors are not compatible.
     fn add(self, rhs: Self) -> Self::Output {
-        debug_assert_eq!(self.target_byte, rhs.target_byte);
-        debug_assert_eq!(self.guess_range, rhs.guess_range);
-        debug_assert_eq!(self.num_samples, rhs.num_samples);
-
-        // WARN: `self.leakage_func` and `rhs.leakage_func` must be the same function
+        debug_assert!(self.is_compatible_with(&rhs));
 
         Self {
             num_samples: self.num_samples,
