@@ -57,7 +57,7 @@ impl CenteredProduct {
 
     /// Apply the processing to an input trace
     /// The centered product substract the mean of the traces and then perform products between every input time samples
-    pub fn apply<T: Into<f64> + Copy>(&mut self, trace: ArrayView1<T>) -> Array1<f64> {
+    pub fn apply<T: Into<f64> + Copy>(&self, trace: ArrayView1<T>) -> Array1<f64> {
         // First we substract the mean trace
         let centered_trace: Array1<f64> = trace.mapv(|x| x.into()) - &self.mean;
         let length_out_trace: usize = self.intervals.iter().map(|x| x.len()).product();
@@ -143,7 +143,7 @@ impl StandardScaler {
     }
 
     /// Apply the processing to an input trace
-    pub fn apply<T: Into<f64> + Copy>(&mut self, trace: ArrayView1<T>) -> Array1<f64> {
+    pub fn apply<T: Into<f64> + Copy>(&self, trace: ArrayView1<T>) -> Array1<f64> {
         (trace.mapv(|x| x.into()) - &self.mean) / &self.std
     }
 }
