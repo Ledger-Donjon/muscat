@@ -6,6 +6,7 @@ use crate::processors::MeanVar;
 
 /// Computes the centered product of "order" leakage samples
 /// Used particularly when performing high-order SCA
+#[derive(Debug)]
 pub struct CenteredProduct {
     /// Sum of traces
     acc: Array1<i64>,
@@ -49,14 +50,14 @@ impl CenteredProduct {
     /// Compute the mean
     pub fn finalize(&mut self) {
         if self.count != 0 {
-            self.mean = self.acc.map(|&x| x as f64 / self.count as f64)
+            self.mean = self.acc.mapv(|x| x as f64 / self.count as f64)
         }
         self.processed = true
     }
 
     /// Apply the processing to an input trace
     /// The centered product substract the mean of the traces and then perform products between every input time samples
-    pub fn apply<T: Into<f64> + Copy>(&mut self, trace: ArrayView1<T>) -> Array1<f64> {
+    pub fn apply<T: Into<f64> + Copy>(&self, trace: ArrayView1<T>) -> Array1<f64> {
         // First we substract the mean trace
         let centered_trace: Array1<f64> = trace.mapv(|x| x.into()) - &self.mean;
         let length_out_trace: usize = self.intervals.iter().map(|x| x.len()).product();
@@ -79,6 +80,7 @@ impl CenteredProduct {
 }
 
 /// Elevates parts of a trace to a certain power
+#[derive(Debug)]
 pub struct Power {
     intervals: Vec<Range<i32>>,
     power: i32,
@@ -110,6 +112,7 @@ impl Power {
 }
 
 /// Standardization of the traces by removing the mean and scaling to unit variance
+#[derive(Debug)]
 pub struct StandardScaler {
     /// meanVar processor
     meanvar: MeanVar,
@@ -140,7 +143,7 @@ impl StandardScaler {
     }
 
     /// Apply the processing to an input trace
-    pub fn apply<T: Into<f64> + Copy>(&mut self, trace: ArrayView1<T>) -> Array1<f64> {
+    pub fn apply<T: Into<f64> + Copy>(&self, trace: ArrayView1<T>) -> Array1<f64> {
         (trace.mapv(|x| x.into()) - &self.mean) / &self.std
     }
 }
@@ -200,7 +203,7 @@ mod tests {
 
         for (i, t) in traces.iter().enumerate() {
             assert_eq!(
-                processor2.apply(t.view()).map(|x| round_to_2_digits(*x)),
+                processor2.apply(t.view()).mapv(round_to_2_digits),
                 expected_results[i]
             );
         }
@@ -228,15 +231,15 @@ mod tests {
         ];
 
         assert_eq!(
-            processor1.process(t.view()).map(|x| round_to_2_digits(*x)),
+            processor1.process(t.view()).mapv(round_to_2_digits),
             expected_results[0]
         );
         assert_eq!(
-            processor2.process(t.view()).map(|x| round_to_2_digits(*x)),
+            processor2.process(t.view()).mapv(round_to_2_digits),
             expected_results[1]
         );
         assert_eq!(
-            processor3.process(t.view()).map(|x| round_to_2_digits(*x)),
+            processor3.process(t.view()).mapv(round_to_2_digits),
             expected_results[2]
         );
     }
@@ -277,7 +280,7 @@ mod tests {
 
         for (i, t) in traces.iter().enumerate() {
             assert_eq!(
-                processor.apply(t.view()).map(|x| round_to_2_digits(*x)),
+                processor.apply(t.view()).mapv(round_to_2_digits),
                 expected_results[i]
             );
         }

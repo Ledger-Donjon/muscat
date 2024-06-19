@@ -1,9 +1,11 @@
 //! Convenient utility functions.
 
-use std::{io::Read, path::Path};
+use std::{cmp::Ordering, io::Read, path::Path};
 
-use ndarray::{Array, Array1, Array2, ArrayView2, Axis};
-use ndarray_npy::{read_npy, write_npy, ReadNpyError, ReadableElement, WriteNpyError};
+use ndarray::{Array, Array1, Array2, ArrayView1, ArrayView2, Axis};
+use ndarray_npy::{
+    read_npy, write_npy, ReadNpyError, ReadableElement, WritableElement, WriteNpyError,
+};
 use npyz::{Deserialize, NpyFile};
 
 #[cfg(feature = "progress_bar")]
@@ -58,7 +60,10 @@ pub fn read_array2_from_npy_file<T: ReadableElement>(
     read_npy(path)
 }
 
-pub fn save_array2(path: impl AsRef<Path>, array: ArrayView2<f32>) -> Result<(), WriteNpyError> {
+pub fn save_array2<T>(path: impl AsRef<Path>, array: ArrayView2<T>) -> Result<(), WriteNpyError>
+where
+    T: WritableElement,
+{
     write_npy(path, &array)
 }
 
@@ -77,4 +82,32 @@ pub fn max_per_row(arr: ArrayView2<f32>) -> Array1<f32> {
                 .unwrap()
         })
         .collect()
+}
+
+/// Return the indices that would sort the given array with a comparison function.
+pub fn argsort_by<T, F>(data: &[T], compare: F) -> Vec<usize>
+where
+    F: Fn(&T, &T) -> Ordering,
+{
+    let mut indices: Vec<usize> = (0..data.len()).collect();
+
+    indices.sort_by(|&a, &b| compare(&data[a], &data[b]));
+
+    indices
+}
+
+/// Return the index of the maximum value in the given array.
+pub fn argmax_by<T, F>(array: ArrayView1<T>, compare: F) -> usize
+where
+    F: Fn(&T, &T) -> Ordering,
+{
+    let mut idx_max = 0;
+
+    for i in 0..array.len() {
+        if compare(&array[i], &array[idx_max]).is_gt() {
+            idx_max = i;
+        }
+    }
+
+    idx_max
 }

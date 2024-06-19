@@ -46,14 +46,14 @@ fn cpa() -> Result<()> {
         })
         .reduce(
             || CpaProcessor::new(size, guess_range, target_byte, leakage_model),
-            |a: CpaProcessor, b| a + b,
+            |a, b| a + b,
         );
 
     let cpa_result = cpa.finalize();
-    println!("Guessed key = {}", cpa_result.pass_guess());
+    println!("Guessed key = {}", cpa_result.best_guess());
 
     // save corr key curves in npy
-    save_array("../results/corr.npy", &cpa_result.pass_corr_array())?;
+    save_array("../results/corr.npy", &cpa_result.corr())?;
 
     Ok(())
 }
