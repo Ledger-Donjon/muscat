@@ -166,19 +166,33 @@ where
             differential_curves,
         }
     }
+
+    /// Determine if two [`DpaProcessor`] are compatible for addition.
+    ///
+    /// If they were created with the same parameters, they are compatible.
+    ///
+    /// Note: [`DpaProcessor::selection_function`] cannot be checked for equality, but they must
+    /// have the same selection functions in order to be compatible.
+    fn is_compatible_with(&self, other: &Self) -> bool {
+        self.num_samples == other.num_samples && self.guess_range == other.guess_range
+    }
 }
 
 impl<M, F> Add for DpaProcessor<M, F>
 where
     F: Fn(M, usize) -> bool,
+    M: Clone,
 {
     type Output = Self;
 
+    /// Merge computations of two [`DpaProcessor`]. Processors need to be compatible to be merged
+    /// together, otherwise it can panic or yield incoherent result (see
+    /// [`DpaProcessor::is_compatible_with`]).
+    ///
+    /// # Panics
+    /// Panics in debug if the processors are not compatible.
     fn add(self, rhs: Self) -> Self::Output {
-        debug_assert_eq!(self.num_samples, rhs.num_samples);
-        debug_assert_eq!(self.guess_range, rhs.guess_range);
-
-        // WARN: `self.selection_function` and `rhs.selection_function` must be the same function
+        debug_assert!(self.is_compatible_with(&rhs));
 
         Self {
             num_samples: self.num_samples,

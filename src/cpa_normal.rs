@@ -171,6 +171,18 @@ where
             corr,
         }
     }
+
+    /// Determine if two [`CpaProcessor`] are compatible for addition.
+    ///
+    /// If they were created with the same parameters, they are compatible.
+    ///
+    /// Note: [`CpaProcessor::leakage_func`] cannot be checked for equality, but they must have the
+    /// same leakage functions in order to be compatible.
+    fn is_compatible_with(&self, other: &Self) -> bool {
+        self.num_samples == other.num_samples
+            && self.batch_size == other.batch_size
+            && self.guess_range == other.guess_range
+    }
 }
 
 impl<F> Add for CpaProcessor<F>
@@ -179,12 +191,14 @@ where
 {
     type Output = Self;
 
+    /// Merge computations of two [`CpaProcessor`]. Processors need to be compatible to be merged
+    /// together, otherwise it can panic or yield incoherent result (see
+    /// [`CpaProcessor::is_compatible_with`]).
+    ///
+    /// # Panics
+    /// Panics in debug if the processors are not compatible.
     fn add(self, rhs: Self) -> Self::Output {
-        debug_assert_eq!(self.num_samples, rhs.num_samples);
-        debug_assert_eq!(self.batch_size, rhs.batch_size);
-        debug_assert_eq!(self.guess_range, rhs.guess_range);
-
-        // WARN: `self.leakage_func` and `rhs.leakage_func` must be the same function
+        debug_assert!(self.is_compatible_with(&rhs));
 
         Self {
             num_samples: self.num_samples,
