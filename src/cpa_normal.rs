@@ -166,10 +166,7 @@ where
             }
         }
 
-        Cpa {
-            guess_range: self.guess_range,
-            corr,
-        }
+        Cpa { corr }
     }
 
     /// Determine if two [`CpaProcessor`] are compatible for addition.
