@@ -2,7 +2,7 @@ use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use std::{iter::zip, ops::Add};
 
-use crate::cpa::Cpa;
+use crate::distinguishers::cpa::Cpa;
 
 /// Compute the [`Cpa`] of the given traces using [`CpaProcessor`].
 ///

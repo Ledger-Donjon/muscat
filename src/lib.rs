@@ -1,6 +1,4 @@
-pub mod cpa;
-pub mod cpa_normal;
-pub mod dpa;
+pub mod distinguishers;
 pub mod leakage;
 pub mod leakage_detection;
 pub mod preprocessors;

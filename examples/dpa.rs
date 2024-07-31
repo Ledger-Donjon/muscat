@@ -1,6 +1,6 @@
 use anyhow::Result;
 use indicatif::ProgressIterator;
-use muscat::dpa::DpaProcessor;
+use muscat::distinguishers::dpa::DpaProcessor;
 use muscat::leakage::sbox;
 use muscat::util::read_array2_from_npy_file;
 use ndarray::{s, Array1};

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use indicatif::ProgressIterator;
-use muscat::cpa_normal::CpaProcessor;
+use muscat::distinguishers::cpa_normal::CpaProcessor;
 use muscat::leakage::{hw, sbox};
 use muscat::util::{progress_bar, read_array2_from_npy_file, save_array2};
 use ndarray::*;
