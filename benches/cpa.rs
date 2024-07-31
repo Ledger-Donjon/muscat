@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use muscat::cpa::{self, Cpa, CpaProcessor};
-use muscat::cpa_normal;
+use muscat::distinguishers::cpa::{self, Cpa, CpaProcessor};
+use muscat::distinguishers::cpa_normal;
 use muscat::leakage::{hw, sbox};
 use ndarray::{Array2, ArrayView1, Axis};
 use ndarray_rand::rand::{rngs::StdRng, SeedableRng};
