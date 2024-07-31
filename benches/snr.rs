@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use muscat::processors::{snr, Snr};
+use muscat::leakage_detection::{snr, Snr};
 use ndarray::{Array1, Array2};
 use ndarray_rand::rand::{rngs::StdRng, SeedableRng};
 use ndarray_rand::rand_distr::Uniform;
