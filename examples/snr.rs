@@ -1,6 +1,6 @@
 use anyhow::Result;
 use indicatif::ProgressIterator;
-use muscat::processors::Snr;
+use muscat::leakage_detection::Snr;
 use muscat::quicklog::{BatchIter, Log};
 use muscat::util::{progress_bar, save_array};
 use rayon::prelude::{ParallelBridge, ParallelIterator};
