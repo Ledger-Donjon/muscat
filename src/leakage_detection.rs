@@ -148,9 +148,19 @@ where
 
         let var = self.mean_var.var();
         let mean = self.mean_var.mean();
-        // V[E[L|X]]
+
+        // V[E[L|X]] = E[E[L|X]^2] - E[E[L|X]]^2
+        // However, from law of total expectation: E[E[L|X]] = E[L]
+        // Thus, V[E[L|X]] = E[E[L|X]^2] - E[L]^2
+        // NOTE: As of today (rustc 1.80), implementing the following operations in a loop instead
+        // of using ndarray operators yields smaller code but same perfs.
         let velx = (acc / self.mean_var.count() as f32) - mean.mapv(|x| x.powi(2));
-        1f32 / (var / velx - 1f32)
+
+        // From the law of total variance, V[L] = E[V[L|X]] + V[E[L|X]].
+        // Thus, the SNR can be computed as SNR = V[E[L|X]] / (V[L] - V[E[L|X]])
+        // The computation does not use V[E[L|X]], reducing the number of operations.
+        // NOTE: As of today (rustc 1.80), the clone gets optimized.
+        velx.clone() / (var - velx)
     }
 
     /// Return the trace size handled
