@@ -24,6 +24,14 @@ def compute_snr(
 ) -> npt.NDArray[np.float32]:
     """Compute the SNR of the given traces."""
 
+def compute_nicv(
+    traces: Trace,
+    classes: int,
+    get_class: Callable[[int], int],
+    batch_size: int,
+) -> npt.NDArray[np.float32]:
+    """Compute the NICV of the given traces."""
+
 def compute_ttest(
     traces: Trace,
     trace_classes: npt.NDArray[np.bool_],
