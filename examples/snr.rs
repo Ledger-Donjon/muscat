@@ -1,6 +1,6 @@
 use anyhow::Result;
 use indicatif::ProgressIterator;
-use muscat::leakage_detection::Snr;
+use muscat::leakage_detection::SnrProcessor;
 use muscat::quicklog::{BatchIter, Log};
 use muscat::util::{progress_bar, save_array};
 use rayon::prelude::{ParallelBridge, ParallelIterator};
@@ -12,7 +12,7 @@ fn main() -> Result<()> {
     let leakage_size = log.leakage_size();
     let trace_count = log.len();
 
-    let result: Snr = log
+    let result: SnrProcessor = log
         .into_iter()
         .progress_with(progress_bar(trace_count))
         // Process records sharing same leakage numpy files by batches, so batch files get read only
@@ -24,7 +24,7 @@ fn main() -> Result<()> {
         // Use `par_bridge` from rayon crate to make processing multithreaded
         .par_bridge()
         .fold(
-            || Snr::new(leakage_size, 256),
+            || SnrProcessor::new(leakage_size, 256),
             |mut snr, batch| {
                 for trace in batch {
                     // `process` takes an `ArrayView1` argument, which makes possible to pass a
@@ -35,7 +35,7 @@ fn main() -> Result<()> {
             },
         )
         // Merge the results of each processing thread
-        .reduce(|| Snr::new(leakage_size, 256), |a, b| a + b);
+        .reduce(|| SnrProcessor::new(leakage_size, 256), |a, b| a + b);
 
     // Save the resulting SNR trace to a numpy file
     save_array("result.npy", &result.snr())?;
