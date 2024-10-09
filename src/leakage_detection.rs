@@ -4,12 +4,12 @@ use ndarray::{s, Array1, Array2, ArrayView1, ArrayView2, Axis};
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use std::{iter::zip, ops::Add};
 
-/// Compute the SNR of the given traces.
+/// Compute the SNR of the given traces using [`SnrProcessor`].
 ///
 /// `get_class` is a function returning the class of the given trace by index.
 ///
 /// # Panics
-/// Panic if `batch_size` is 0.
+/// - Panic if `batch_size` is 0.
 pub fn snr<T, F>(
     leakages: ArrayView2<T>,
     classes: usize,
@@ -28,7 +28,7 @@ where
         .enumerate()
         .par_bridge()
         .fold(
-            || Snr::new(leakages.shape()[1], classes),
+            || SnrProcessor::new(leakages.shape()[1], classes),
             |mut snr, (batch_idx, leakage_batch)| {
                 for i in 0..leakage_batch.shape()[0] {
                     snr.process(leakage_batch.row(i), get_class(batch_idx + i));
@@ -41,9 +41,9 @@ where
         .snr()
 }
 
-/// Processes traces to calculate the Signal-to-Noise Ratio.
+/// A Processor that computes the Signal-to-Noise Ratio of the given traces
 #[derive(Debug, Clone)]
-pub struct Snr {
+pub struct SnrProcessor {
     mean_var: MeanVar,
     /// Sum of traces per class
     classes_sum: Array2<i64>,
@@ -51,13 +51,13 @@ pub struct Snr {
     classes_count: Array1<usize>,
 }
 
-impl Snr {
-    /// Create a new SNR processor.
+impl SnrProcessor {
+    /// Create a new [`SnrProcessor`].
     ///
     /// # Arguments
     ///
-    /// * `size` - Size of the input traces
-    /// * `num_classes` - Number of classes
+    /// - `size` - Size of the input traces
+    /// - `num_classes` - Number of classes
     pub fn new(size: usize, num_classes: usize) -> Self {
         Self {
             mean_var: MeanVar::new(size),
@@ -69,7 +69,7 @@ impl Snr {
     /// Process an input trace to update internal accumulators.
     ///
     /// # Panics
-    /// Panics in debug if the length of the trace is different from the size of [`Snr`].
+    /// - Panics in debug if the length of the trace is different from the size of [`SnrProcessor`].
     pub fn process<T: Into<i64> + Copy>(&mut self, trace: ArrayView1<T>, class: usize) {
         debug_assert!(trace.len() == self.size());
 
@@ -82,9 +82,10 @@ impl Snr {
         self.classes_count[class] += 1;
     }
 
-    /// Returns the Signal-to-Noise Ratio of the traces.
-    /// SNR = V[E[L|X]] / E[V[L|X]]
+    /// Finalize the processor computation and return the Signal-to-Noise Ratio.
     pub fn snr(&self) -> Array1<f64> {
+        // SNR = V[E[L|X]] / E[V[L|X]]
+
         let size = self.size();
 
         let mut acc: Array1<f64> = Array1::zeros(size);
@@ -116,7 +117,7 @@ impl Snr {
         self.classes_count.len()
     }
 
-    /// Determine if two [`Snr`] are compatible for addition.
+    /// Determine if two [`SnrProcessor`] are compatible for addition.
     ///
     /// If they were created with the same parameters, they are compatible.
     fn is_compatible_with(&self, other: &Self) -> bool {
@@ -124,15 +125,15 @@ impl Snr {
     }
 }
 
-impl Add for Snr {
+impl Add for SnrProcessor {
     type Output = Self;
 
-    /// Merge computations of two [`Snr`]. Processors need to be compatible to be merged
+    /// Merge computations of two [`SnrProcessor`]. Processors need to be compatible to be merged
     /// together, otherwise it can panic or yield incoherent result (see
-    /// [`Snr::is_compatible_with`]).
+    /// [`SnrProcessor::is_compatible_with`]).
     ///
     /// # Panics
-    /// Panics in debug if the processors are not compatible.
+    /// - Panics in debug if the processors are not compatible.
     fn add(self, rhs: Self) -> Self::Output {
         debug_assert!(self.is_compatible_with(&rhs));
 
@@ -144,7 +145,7 @@ impl Add for Snr {
     }
 }
 
-/// Compute the Welch's T-test of the given traces.
+/// Compute the Welch's T-test of the given traces using [`TTestProcessor`].
 ///
 /// # Panics
 /// - Panic if `traces.shape()[0] != trace_classes.shape()[0]`
@@ -166,7 +167,7 @@ where
     )
     .par_bridge()
     .fold(
-        || TTest::new(traces.shape()[1]),
+        || TTestProcessor::new(traces.shape()[1]),
         |mut ttest, (trace_batch, trace_classes_batch)| {
             for i in 0..trace_batch.shape()[0] {
                 ttest.process(trace_batch.row(i), trace_classes_batch[i]);
@@ -179,18 +180,17 @@ where
     .ttest()
 }
 
-/// Process traces to calculate Welch's T-Test.
+/// A Processor that computes the Welch's T-Test of the given traces.
 #[derive(Debug)]
-pub struct TTest {
+pub struct TTestProcessor {
     mean_var_1: MeanVar,
     mean_var_2: MeanVar,
 }
 
-impl TTest {
-    /// Create a new Welch's T-Test processor.
+impl TTestProcessor {
+    /// Create a new [`TTestProcessor`].
     ///
     /// # Arguments
-    ///
     /// * `size` - Number of samples per trace
     pub fn new(size: usize) -> Self {
         Self {
@@ -202,7 +202,6 @@ impl TTest {
     /// Process an input trace to update internal accumulators.
     ///
     /// # Arguments
-    ///
     /// * `trace` - Input trace.
     /// * `class` - Indicates to which of the two partitions the given trace belongs.
     ///
@@ -235,7 +234,7 @@ impl TTest {
         self.mean_var_1.size()
     }
 
-    /// Determine if two [`TTest`] are compatible for addition.
+    /// Determine if two [`TTestProcessor`] are compatible for addition.
     ///
     /// If they were created with the same parameters, they are compatible.
     fn is_compatible_with(&self, other: &Self) -> bool {
@@ -243,12 +242,12 @@ impl TTest {
     }
 }
 
-impl Add for TTest {
+impl Add for TTestProcessor {
     type Output = Self;
 
-    /// Merge computations of two [`TTest`]. Processors need to be compatible to be merged
+    /// Merge computations of two [`TTestProcessor`]. Processors need to be compatible to be merged
     /// together, otherwise it can panic or yield incoherent result (see
-    /// [`TTest::is_compatible_with`]).
+    /// [`TTestProcessor::is_compatible_with`]).
     ///
     /// # Panics
     /// Panics in debug if the processors are not compatible.
@@ -264,12 +263,12 @@ impl Add for TTest {
 
 #[cfg(test)]
 mod tests {
-    use super::{ttest, TTest};
+    use super::{ttest, TTestProcessor};
     use ndarray::array;
 
     #[test]
     fn test_ttest() {
-        let mut processor = TTest::new(4);
+        let mut processor = TTestProcessor::new(4);
         let traces = [
             array![77, 137, 51, 91],
             array![72, 61, 91, 83],
@@ -298,7 +297,7 @@ mod tests {
 
     #[test]
     fn test_ttest_helper() {
-        let mut processor = TTest::new(4);
+        let mut processor = TTestProcessor::new(4);
         let traces = array![
             [77, 137, 51, 91],
             [72, 61, 91, 83],

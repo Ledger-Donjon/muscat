@@ -43,19 +43,19 @@ fn bench_dpa(c: &mut Criterion) {
 
     group.measurement_time(std::time::Duration::from_secs(60));
 
-    for nb_traces in [1000, 2000, 5000].into_iter() {
-        let leakages = Array2::random_using((nb_traces, 5000), Uniform::new(-2., 2.), &mut rng);
+    for num_traces in [1000, 2000, 5000].into_iter() {
+        let leakages = Array2::random_using((num_traces, 5000), Uniform::new(-2., 2.), &mut rng);
         let plaintexts =
-            Array2::random_using((nb_traces, 16), Uniform::new_inclusive(0, 255), &mut rng);
+            Array2::random_using((num_traces, 16), Uniform::new_inclusive(0, 255), &mut rng);
 
         group.bench_with_input(
-            BenchmarkId::new("sequential", nb_traces),
+            BenchmarkId::new("sequential", num_traces),
             &(&leakages, &plaintexts),
             |b, (leakages, plaintexts)| b.iter(|| dpa_sequential(leakages, plaintexts)),
         );
 
         group.bench_with_input(
-            BenchmarkId::new("parallel", nb_traces),
+            BenchmarkId::new("parallel", num_traces),
             &(&leakages, &plaintexts),
             |b, (leakages, plaintexts)| b.iter(|| dpa_parallel(leakages, plaintexts)),
         );

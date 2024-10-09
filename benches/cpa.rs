@@ -53,21 +53,21 @@ fn bench_cpa(c: &mut Criterion) {
 
     group.measurement_time(std::time::Duration::from_secs(60));
 
-    for nb_traces in [5000, 10000, 25000].into_iter() {
-        let leakages = Array2::random_using((nb_traces, 5000), Uniform::new(-2., 2.), &mut rng);
+    for num_traces in [5000, 10000, 25000].into_iter() {
+        let leakages = Array2::random_using((num_traces, 5000), Uniform::new(-2., 2.), &mut rng);
         let plaintexts = Array2::random_using(
-            (nb_traces, 16),
+            (num_traces, 16),
             Uniform::new_inclusive(0u8, 255u8),
             &mut rng,
         );
 
         group.bench_with_input(
-            BenchmarkId::new("cpa_sequential", nb_traces),
+            BenchmarkId::new("cpa_sequential", num_traces),
             &(&leakages, &plaintexts),
             |b, (leakages, plaintexts)| b.iter(|| cpa_sequential(leakages, plaintexts)),
         );
         group.bench_with_input(
-            BenchmarkId::new("cpa_parallel", nb_traces),
+            BenchmarkId::new("cpa_parallel", num_traces),
             &(&leakages, &plaintexts),
             |b, (leakages, plaintexts)| {
                 b.iter(|| {
@@ -83,15 +83,15 @@ fn bench_cpa(c: &mut Criterion) {
             },
         );
         // For 25000 traces, 60s of measurement_time is too low
-        if nb_traces <= 10000 {
+        if num_traces <= 10000 {
             group.bench_with_input(
-                BenchmarkId::new("cpa_normal_sequential", nb_traces),
+                BenchmarkId::new("cpa_normal_sequential", num_traces),
                 &(&leakages, &plaintexts),
                 |b, (leakages, plaintexts)| b.iter(|| cpa_normal_sequential(leakages, plaintexts)),
             );
         }
         group.bench_with_input(
-            BenchmarkId::new("cpa_normal_parallel", nb_traces),
+            BenchmarkId::new("cpa_normal_parallel", num_traces),
             &(&leakages, &plaintexts),
             |b, (leakages, plaintexts)| {
                 b.iter(|| {
