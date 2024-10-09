@@ -9,29 +9,29 @@ use std::ops::Add;
 /// `get_class` is a function returning the class of the given trace by index.
 ///
 /// # Panics
-/// Panic if `chunk_size` is 0.
+/// Panic if `batch_size` is 0.
 pub fn snr<T, F>(
     leakages: ArrayView2<T>,
     classes: usize,
     get_class: F,
-    chunk_size: usize,
+    batch_size: usize,
 ) -> Array1<f64>
 where
     T: Into<i64> + Copy + Sync,
     F: Fn(usize) -> usize + Sync,
 {
-    assert!(chunk_size > 0);
+    assert!(batch_size > 0);
 
     // From benchmarks fold + reduce_with is faster than map + reduce/reduce_with and fold + reduce
     leakages
-        .axis_chunks_iter(Axis(0), chunk_size)
+        .axis_chunks_iter(Axis(0), batch_size)
         .enumerate()
         .par_bridge()
         .fold(
             || Snr::new(leakages.shape()[1], classes),
-            |mut snr, (chunk_idx, leakages_chunk)| {
-                for i in 0..leakages_chunk.shape()[0] {
-                    snr.process(leakages_chunk.row(i), get_class(chunk_idx + i));
+            |mut snr, (batch_idx, leakage_batch)| {
+                for i in 0..leakage_batch.shape()[0] {
+                    snr.process(leakage_batch.row(i), get_class(batch_idx + i));
                 }
                 snr
             },

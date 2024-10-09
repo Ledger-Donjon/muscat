@@ -7,31 +7,31 @@ use crate::util::{argmax_by, argsort_by, max_per_row};
 /// Compute the [`Dpa`] of the given traces using [`DpaProcessor`].
 ///
 /// # Panics
-/// Panic if `chunk_size` is not strictly positive.
+/// Panic if `batch_size` is not strictly positive.
 pub fn dpa<M, T, F>(
     leakages: ArrayView2<T>,
     metadata: ArrayView1<M>,
     guess_range: usize,
     selection_function: F,
-    chunk_size: usize,
+    batch_size: usize,
 ) -> Dpa
 where
     T: Into<f32> + Copy + Sync,
     M: Clone + Send + Sync,
     F: Fn(M, usize) -> bool + Send + Sync + Copy,
 {
-    assert!(chunk_size > 0);
+    assert!(batch_size > 0);
 
     zip(
-        leakages.axis_chunks_iter(Axis(0), chunk_size),
-        metadata.axis_chunks_iter(Axis(0), chunk_size),
+        leakages.axis_chunks_iter(Axis(0), batch_size),
+        metadata.axis_chunks_iter(Axis(0), batch_size),
     )
     .par_bridge()
     .fold(
         || DpaProcessor::new(leakages.shape()[1], guess_range, selection_function),
-        |mut dpa, (leakages_chunk, metadata_chunk)| {
-            for i in 0..leakages_chunk.shape()[0] {
-                dpa.update(leakages_chunk.row(i), metadata_chunk[i].clone());
+        |mut dpa, (leakage_batch, metadata_batch)| {
+            for i in 0..leakage_batch.shape()[0] {
+                dpa.update(leakage_batch.row(i), metadata_batch[i].clone());
             }
 
             dpa
