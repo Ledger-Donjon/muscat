@@ -30,16 +30,16 @@ pub fn leakage_model_normal(value: ArrayView1<usize>, guess: usize) -> usize {
 }
 
 fn cpa_normal_sequential(leakages: &Array2<f64>, plaintexts: &Array2<u8>) -> Cpa {
-    let chunk_size = 500;
+    let batch_size = 500;
 
     let mut cpa =
-        cpa_normal::CpaProcessor::new(leakages.shape()[1], chunk_size, 256, leakage_model_normal);
+        cpa_normal::CpaProcessor::new(leakages.shape()[1], batch_size, 256, leakage_model_normal);
 
-    for (leakages_chunk, plaintexts_chunk) in zip(
-        leakages.axis_chunks_iter(Axis(0), chunk_size),
-        plaintexts.axis_chunks_iter(Axis(0), chunk_size),
+    for (leakage_batch, plaintext_batch) in zip(
+        leakages.axis_chunks_iter(Axis(0), batch_size),
+        plaintexts.axis_chunks_iter(Axis(0), batch_size),
     ) {
-        cpa.update(leakages_chunk.map(|&x| x as f32).view(), plaintexts_chunk);
+        cpa.update(leakage_batch.map(|&x| x as f32).view(), plaintext_batch);
     }
 
     cpa.finalize()

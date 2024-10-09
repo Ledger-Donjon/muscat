@@ -10,33 +10,33 @@ use std::{iter::zip, ops::Add};
 ///
 /// # Panics
 /// - Panic if `leakages.shape()[0] != plaintexts.shape()[0]`
-/// - Panic if `chunk_size` is 0.
+/// - Panic if `batch_size` is 0.
 pub fn cpa<T, F>(
     leakages: ArrayView2<T>,
     plaintexts: ArrayView2<T>,
     guess_range: usize,
     target_byte: usize,
     leakage_func: F,
-    chunk_size: usize,
+    batch_size: usize,
 ) -> Cpa
 where
     T: Into<usize> + Copy + Sync,
     F: Fn(usize, usize) -> usize + Send + Sync + Copy,
 {
     assert_eq!(leakages.shape()[0], plaintexts.shape()[0]);
-    assert!(chunk_size > 0);
+    assert!(batch_size > 0);
 
     // From benchmarks fold + reduce_with is faster than map + reduce/reduce_with and fold + reduce
     zip(
-        leakages.axis_chunks_iter(Axis(0), chunk_size),
-        plaintexts.axis_chunks_iter(Axis(0), chunk_size),
+        leakages.axis_chunks_iter(Axis(0), batch_size),
+        plaintexts.axis_chunks_iter(Axis(0), batch_size),
     )
     .par_bridge()
     .fold(
         || CpaProcessor::new(leakages.shape()[1], guess_range, target_byte, leakage_func),
-        |mut cpa, (leakages_chunk, plaintexts_chunk)| {
-            for i in 0..leakages_chunk.shape()[0] {
-                cpa.update(leakages_chunk.row(i), plaintexts_chunk.row(i));
+        |mut cpa, (leakage_batch, plaintext_batch)| {
+            for i in 0..leakage_batch.shape()[0] {
+                cpa.update(leakage_batch.row(i), plaintext_batch.row(i));
             }
 
             cpa
