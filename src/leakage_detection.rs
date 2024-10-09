@@ -2,9 +2,9 @@
 use crate::processors::MeanVar;
 use ndarray::{s, Array1, Array2, ArrayView1, ArrayView2, Axis};
 use rayon::iter::{ParallelBridge, ParallelIterator};
-use std::ops::Add;
+use std::{iter::zip, ops::Add};
 
-/// Computes the SNR of the given traces.
+/// Compute the SNR of the given traces.
 ///
 /// `get_class` is a function returning the class of the given trace by index.
 ///
@@ -52,12 +52,12 @@ pub struct Snr {
 }
 
 impl Snr {
-    /// Creates a new SNR processor.
+    /// Create a new SNR processor.
     ///
     /// # Arguments
     ///
     /// * `size` - Size of the input traces
-    /// * `classes` - Number of classes
+    /// * `num_classes` - Number of classes
     pub fn new(size: usize, num_classes: usize) -> Self {
         Self {
             mean_var: MeanVar::new(size),
@@ -66,7 +66,7 @@ impl Snr {
         }
     }
 
-    /// Processes an input trace to update internal accumulators.
+    /// Process an input trace to update internal accumulators.
     ///
     /// # Panics
     /// Panics in debug if the length of the trace is different from the size of [`Snr`].
@@ -106,12 +106,12 @@ impl Snr {
         1f64 / (var / velx - 1f64)
     }
 
-    /// Returns the trace size handled
+    /// Return the trace size handled
     pub fn size(&self) -> usize {
         self.classes_sum.shape()[1]
     }
 
-    /// Returns the number of classes handled.
+    /// Return the number of classes handled.
     pub fn num_classes(&self) -> usize {
         self.classes_count.len()
     }
@@ -144,7 +144,42 @@ impl Add for Snr {
     }
 }
 
-/// Processes traces to calculate Welch's T-Test.
+/// Compute the Welch's T-test of the given traces.
+///
+/// # Panics
+/// - Panic if `traces.shape()[0] != trace_classes.shape()[0]`
+/// - Panic if `batch_size` is 0.
+pub fn ttest<T>(
+    traces: ArrayView2<T>,
+    trace_classes: ArrayView1<bool>,
+    batch_size: usize,
+) -> Array1<f64>
+where
+    T: Into<i64> + Copy + Sync,
+{
+    assert_eq!(traces.shape()[0], trace_classes.shape()[0]);
+    assert!(batch_size > 0);
+
+    zip(
+        traces.axis_chunks_iter(Axis(0), batch_size),
+        trace_classes.axis_chunks_iter(Axis(0), batch_size),
+    )
+    .par_bridge()
+    .fold(
+        || TTest::new(traces.shape()[1]),
+        |mut ttest, (trace_batch, trace_classes_batch)| {
+            for i in 0..trace_batch.shape()[0] {
+                ttest.process(trace_batch.row(i), trace_classes_batch[i]);
+            }
+            ttest
+        },
+    )
+    .reduce_with(|a, b| a + b)
+    .unwrap()
+    .ttest()
+}
+
+/// Process traces to calculate Welch's T-Test.
 #[derive(Debug)]
 pub struct TTest {
     mean_var_1: MeanVar,
@@ -152,7 +187,7 @@ pub struct TTest {
 }
 
 impl TTest {
-    /// Creates a new Welch's T-Test processor.
+    /// Create a new Welch's T-Test processor.
     ///
     /// # Arguments
     ///
@@ -164,7 +199,7 @@ impl TTest {
         }
     }
 
-    /// Processes an input trace to update internal accumulators.
+    /// Process an input trace to update internal accumulators.
     ///
     /// # Arguments
     ///
@@ -183,7 +218,7 @@ impl TTest {
         }
     }
 
-    /// Calculate and returns Welch's T-Test result.
+    /// Calculate and return Welch's T-Test result.
     pub fn ttest(&self) -> Array1<f64> {
         // E(X1) - E(X2)
         let q = self.mean_var_1.mean() - self.mean_var_2.mean();
@@ -195,7 +230,7 @@ impl TTest {
         q / d
     }
 
-    /// Returns the trace size handled.
+    /// Return the trace size handled.
     pub fn size(&self) -> usize {
         self.mean_var_1.size()
     }
@@ -229,7 +264,7 @@ impl Add for TTest {
 
 #[cfg(test)]
 mod tests {
-    use super::TTest;
+    use super::{ttest, TTest};
     use ndarray::array;
 
     #[test]
@@ -258,6 +293,33 @@ mod tests {
                 0.29385284736362266,
                 0.23308466737856662
             ]
+        );
+    }
+
+    #[test]
+    fn test_ttest_helper() {
+        let mut processor = TTest::new(4);
+        let traces = array![
+            [77, 137, 51, 91],
+            [72, 61, 91, 83],
+            [39, 49, 52, 23],
+            [26, 114, 63, 45],
+            [30, 8, 97, 91],
+            [13, 68, 7, 45],
+            [17, 181, 60, 34],
+            [43, 88, 76, 78],
+            [0, 36, 35, 0],
+            [93, 191, 49, 26],
+        ];
+        let trace_classes =
+            array![true, false, false, true, false, false, true, false, false, true];
+        for (i, trace) in traces.rows().into_iter().enumerate() {
+            processor.process(trace, trace_classes[i]);
+        }
+
+        assert_eq!(
+            processor.ttest(),
+            ttest(traces.view(), trace_classes.view(), 2,)
         );
     }
 }
