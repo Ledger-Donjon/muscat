@@ -11,7 +11,7 @@ use std::{iter::zip, ops::Add};
 /// # Panics
 /// - Panic if `batch_size` is 0.
 pub fn snr<T, F>(
-    leakages: ArrayView2<T>,
+    traces: ArrayView2<T>,
     classes: usize,
     get_class: F,
     batch_size: usize,
@@ -23,15 +23,15 @@ where
     assert!(batch_size > 0);
 
     // From benchmarks fold + reduce_with is faster than map + reduce/reduce_with and fold + reduce
-    leakages
+    traces
         .axis_chunks_iter(Axis(0), batch_size)
         .enumerate()
         .par_bridge()
         .fold(
-            || SnrProcessor::new(leakages.shape()[1], classes),
-            |mut snr, (batch_idx, leakage_batch)| {
-                for i in 0..leakage_batch.shape()[0] {
-                    snr.process(leakage_batch.row(i), get_class(batch_idx + i));
+            || SnrProcessor::new(traces.shape()[1], classes),
+            |mut snr, (batch_idx, trace_batch)| {
+                for i in 0..trace_batch.shape()[0] {
+                    snr.process(trace_batch.row(i), get_class(batch_idx + i));
                 }
                 snr
             },
@@ -318,7 +318,7 @@ mod tests {
 
         assert_eq!(
             processor.ttest(),
-            ttest(traces.view(), trace_classes.view(), 2,)
+            ttest(traces.view(), trace_classes.view(), 2)
         );
     }
 }

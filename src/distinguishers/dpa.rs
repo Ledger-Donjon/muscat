@@ -9,7 +9,7 @@ use crate::util::{argmax_by, argsort_by, max_per_row};
 /// # Panics
 /// Panic if `batch_size` is not strictly positive.
 pub fn dpa<M, T, F>(
-    leakages: ArrayView2<T>,
+    traces: ArrayView2<T>,
     metadata: ArrayView1<M>,
     guess_range: usize,
     selection_function: F,
@@ -23,15 +23,15 @@ where
     assert!(batch_size > 0);
 
     zip(
-        leakages.axis_chunks_iter(Axis(0), batch_size),
+        traces.axis_chunks_iter(Axis(0), batch_size),
         metadata.axis_chunks_iter(Axis(0), batch_size),
     )
     .par_bridge()
     .fold(
-        || DpaProcessor::new(leakages.shape()[1], guess_range, selection_function),
-        |mut dpa, (leakage_batch, metadata_batch)| {
-            for i in 0..leakage_batch.shape()[0] {
-                dpa.update(leakage_batch.row(i), metadata_batch[i].clone());
+        || DpaProcessor::new(traces.shape()[1], guess_range, selection_function),
+        |mut dpa, (trace_batch, metadata_batch)| {
+            for i in 0..trace_batch.shape()[0] {
+                dpa.update(trace_batch.row(i), metadata_batch[i].clone());
             }
 
             dpa

@@ -26,13 +26,13 @@ fn rank() -> Result<()> {
     for file in (0..nfiles).progress_with(progress_bar(nfiles)) {
         let dir_l = format!("{folder}/l{file}.npy");
         let dir_p = format!("{folder}/p{file}.npy");
-        let leakages = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
+        let traces = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
         let plaintext = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
-        for sample in (0..leakages.shape()[0]).step_by(batch_size) {
+        for sample in (0..traces.shape()[0]).step_by(batch_size) {
             let l_sample: ndarray::ArrayBase<
                 ndarray::ViewRepr<&FormatTraces>,
                 ndarray::Dim<[usize; 2]>,
-            > = leakages.slice(s![sample..sample + batch_size, ..]);
+            > = traces.slice(s![sample..sample + batch_size, ..]);
             let p_sample = plaintext.slice(s![sample..sample + batch_size, ..]);
             let x = (0..batch_size)
                 .par_bridge()

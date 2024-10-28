@@ -22,12 +22,12 @@ fn dpa() -> Result<()> {
     let folder = String::from("../../data/cw");
     let dir_l = format!("{folder}/leakages.npy");
     let dir_p = format!("{folder}/plaintexts.npy");
-    let leakages = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
+    let traces = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
     let plaintext = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
-    let len_traces = 20000; //leakages.shape()[0];
+    let len_traces = 20000; //traces.shape()[0];
     let mut dpa_proc = DpaProcessor::new(size, guess_range, selection_function);
     for i in (0..len_traces).progress() {
-        let tmp_trace = leakages
+        let tmp_trace = traces
             .row(i)
             .slice(s![start_sample..end_sample])
             .mapv(|t| t as f32);
@@ -50,15 +50,15 @@ fn dpa_success() -> Result<()> {
     let folder = String::from("../../data/cw");
     let dir_l = format!("{folder}/leakages.npy");
     let dir_p = format!("{folder}/plaintexts.npy");
-    let leakages = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
+    let traces = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
     let plaintext = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
-    let len_traces = leakages.shape()[0];
+    let len_traces = traces.shape()[0];
     let mut dpa_proc = DpaProcessor::new(size, guess_range, selection_function);
     let rank_traces: usize = 100;
 
     let mut rank = Array1::zeros(guess_range);
     for i in (0..len_traces).progress() {
-        let tmp_trace = leakages
+        let tmp_trace = traces
             .row(i)
             .slice(s![start_sample..end_sample])
             .mapv(|t| t as f32);
@@ -87,15 +87,15 @@ fn dpa_parallel() -> Result<()> {
     let folder = String::from("../../data/cw");
     let dir_l = format!("{folder}/leakages.npy");
     let dir_p = format!("{folder}/plaintexts.npy");
-    let leakages = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
+    let traces = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
     let plaintext = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
-    let len_traces = 20000; //leakages.shape()[0];
+    let len_traces = 20000; // traces.shape()[0];
     let batch = 2500;
     let dpa = (0..len_traces)
         .step_by(batch)
         .par_bridge()
         .map(|range_rows| {
-            let tmp_leakages = leakages
+            let tmp_traces = traces
                 .slice(s![range_rows..range_rows + batch, start_sample..end_sample])
                 .mapv(|l| l as f32);
             let tmp_metadata = plaintext
@@ -104,7 +104,7 @@ fn dpa_parallel() -> Result<()> {
 
             let mut dpa_inner = DpaProcessor::new(size, guess_range, selection_function);
             for i in 0..batch {
-                let trace = tmp_leakages.row(i);
+                let trace = tmp_traces.row(i);
                 let metadata = tmp_metadata.row(i).to_owned();
                 dpa_inner.update(trace, metadata);
             }

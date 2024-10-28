@@ -7,10 +7,10 @@ use crate::distinguishers::cpa::Cpa;
 /// Compute the [`Cpa`] of the given traces using [`CpaProcessor`].
 ///
 /// # Panics
-/// - Panic if `leakages.shape()[0] != plaintexts.shape()[0]`
+/// - Panic if `traces.shape()[0] != plaintexts.shape()[0]`
 /// - Panic if `batch_size` is 0.
 pub fn cpa<T, U, F>(
-    leakages: ArrayView2<T>,
+    traces: ArrayView2<T>,
     plaintexts: ArrayView2<U>,
     guess_range: usize,
     leakage_func: F,
@@ -21,18 +21,18 @@ where
     U: Into<usize> + Copy + Sync,
     F: Fn(ArrayView1<usize>, usize) -> usize + Send + Sync + Copy,
 {
-    assert_eq!(leakages.shape()[0], plaintexts.shape()[0]);
+    assert_eq!(traces.shape()[0], plaintexts.shape()[0]);
     assert!(batch_size > 0);
 
     zip(
-        leakages.axis_chunks_iter(Axis(0), batch_size),
+        traces.axis_chunks_iter(Axis(0), batch_size),
         plaintexts.axis_chunks_iter(Axis(0), batch_size),
     )
     .par_bridge()
     .fold(
-        || CpaProcessor::new(leakages.shape()[1], batch_size, guess_range, leakage_func),
-        |mut cpa, (leakage_batch, plaintext_batch)| {
-            cpa.update(leakage_batch, plaintext_batch);
+        || CpaProcessor::new(traces.shape()[1], batch_size, guess_range, leakage_func),
+        |mut cpa, (trace_batch, plaintext_batch)| {
+            cpa.update(trace_batch, plaintext_batch);
 
             cpa
         },
@@ -54,13 +54,13 @@ where
     /// Guess range upper excluded bound
     guess_range: usize,
     /// Sum of traces
-    sum_leakages: Array1<f32>,
+    sum_traces: Array1<f32>,
     /// Sum of square of traces
-    sum2_leakages: Array1<f32>,
+    sum_traces2: Array1<f32>,
     /// Sum of traces per key guess
-    guess_sum_leakages: Array1<f32>,
+    guess_sum_traces: Array1<f32>,
     /// Sum of square of traces per key guess
-    guess_sum2_leakages: Array1<f32>,
+    guess_sum_traces2: Array1<f32>,
     values: Array2<f32>,
     cov: Array2<f32>,
     /// Batch size
@@ -79,10 +79,10 @@ where
         Self {
             num_samples,
             guess_range,
-            sum_leakages: Array1::zeros(num_samples),
-            sum2_leakages: Array1::zeros(num_samples),
-            guess_sum_leakages: Array1::zeros(guess_range),
-            guess_sum2_leakages: Array1::zeros(guess_range),
+            sum_traces: Array1::zeros(num_samples),
+            sum_traces2: Array1::zeros(num_samples),
+            guess_sum_traces: Array1::zeros(guess_range),
+            guess_sum_traces2: Array1::zeros(guess_range),
             values: Array2::zeros((batch_size, guess_range)),
             cov: Array2::zeros((guess_range, num_samples)),
             batch_size,
@@ -132,13 +132,13 @@ where
 
     fn update_key_leakages(&mut self, trace: ArrayView2<f32>, guess_range: usize) {
         for i in 0..self.num_samples {
-            self.sum_leakages[i] += trace.column(i).sum(); // trace[i] as usize;
-            self.sum2_leakages[i] += trace.column(i).dot(&trace.column(i)); // (trace[i] * trace[i]) as usize;
+            self.sum_traces[i] += trace.column(i).sum(); // trace[i] as usize;
+            self.sum_traces2[i] += trace.column(i).dot(&trace.column(i)); // (trace[i] * trace[i]) as usize;
         }
 
         for guess in 0..guess_range {
-            self.guess_sum_leakages[guess] += self.values.column(guess).sum(); //self.values[guess] as usize;
-            self.guess_sum2_leakages[guess] +=
+            self.guess_sum_traces[guess] += self.values.column(guess).sum(); //self.values[guess] as usize;
+            self.guess_sum_traces2[guess] +=
                 self.values.column(guess).dot(&self.values.column(guess));
             // (self.values[guess] * self.values[guess]) as usize;
         }
@@ -147,19 +147,19 @@ where
     /// Finalize the calculation after feeding the overall traces.
     pub fn finalize(&self) -> Cpa {
         let cov_n = self.cov.clone() / self.num_traces as f32;
-        let avg_keys = self.guess_sum_leakages.clone() / self.num_traces as f32;
-        let std_key = self.guess_sum2_leakages.clone() / self.num_traces as f32;
-        let avg_leakages = self.sum_leakages.clone() / self.num_traces as f32;
-        let std_leakages = self.sum2_leakages.clone() / self.num_traces as f32;
+        let avg_keys = self.guess_sum_traces.clone() / self.num_traces as f32;
+        let std_key = self.guess_sum_traces2.clone() / self.num_traces as f32;
+        let avg_traces = self.sum_traces.clone() / self.num_traces as f32;
+        let std_traces = self.sum_traces2.clone() / self.num_traces as f32;
 
         let mut corr = Array2::zeros((self.guess_range, self.num_samples));
         for i in 0..self.guess_range {
             for x in 0..self.num_samples {
-                let numerator = cov_n[[i, x]] - (avg_keys[i] * avg_leakages[x]);
+                let numerator = cov_n[[i, x]] - (avg_keys[i] * avg_traces[x]);
 
                 let denominator_1 = std_key[i] - (avg_keys[i] * avg_keys[i]);
 
-                let denominator_2 = std_leakages[x] - (avg_leakages[x] * avg_leakages[x]);
+                let denominator_2 = std_traces[x] - (avg_traces[x] * avg_traces[x]);
                 if numerator != 0.0 {
                     corr[[i, x]] = f32::abs(numerator / f32::sqrt(denominator_1 * denominator_2));
                 }
@@ -200,10 +200,10 @@ where
         Self {
             num_samples: self.num_samples,
             guess_range: self.guess_range,
-            sum_leakages: self.sum_leakages + rhs.sum_leakages,
-            sum2_leakages: self.sum2_leakages + rhs.sum2_leakages,
-            guess_sum_leakages: self.guess_sum_leakages + rhs.guess_sum_leakages,
-            guess_sum2_leakages: self.guess_sum2_leakages + rhs.guess_sum2_leakages,
+            sum_traces: self.sum_traces + rhs.sum_traces,
+            sum_traces2: self.sum_traces2 + rhs.sum_traces2,
+            guess_sum_traces: self.guess_sum_traces + rhs.guess_sum_traces,
+            guess_sum_traces2: self.guess_sum_traces2 + rhs.guess_sum_traces2,
             values: self.values + rhs.values,
             cov: self.cov + rhs.cov,
             batch_size: self.batch_size,
