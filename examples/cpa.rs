@@ -27,9 +27,9 @@ fn cpa() -> Result<()> {
     let folder = String::from("../../data/cw");
     let dir_l = format!("{folder}/leakages.npy");
     let dir_p = format!("{folder}/plaintexts.npy");
-    let leakages = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
+    let traces = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
     let plaintext = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
-    let len_traces = leakages.shape()[0];
+    let len_traces = traces.shape()[0];
 
     let cpa_parallel = ((0..len_traces).step_by(batch))
         .progress_with(progress_bar(len_traces))
@@ -38,7 +38,7 @@ fn cpa() -> Result<()> {
             let mut cpa = CpaProcessor::new(size, batch, guess_range, leakage_model);
             let range_rows = row_number..row_number + batch;
             let range_samples = start_sample..end_sample;
-            let sample_traces = leakages
+            let sample_traces = traces
                 .slice(s![range_rows.clone(), range_samples])
                 .map(|l| *l as f32);
             let sample_metadata = plaintext.slice(s![range_rows, ..]).map(|p| *p as usize);
@@ -76,13 +76,13 @@ fn success() -> Result<()> {
     for i in (0..nfiles).progress() {
         let dir_l = format!("{folder}/l/{i}.npy");
         let dir_p = format!("{folder}/p/{i}.npy");
-        let leakages = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
+        let traces = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
         let plaintext = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
-        for row in (0..leakages.shape()[0]).step_by(batch) {
+        for row in (0..traces.shape()[0]).step_by(batch) {
             let range_samples = start_sample..end_sample;
             let range_rows = row..row + batch;
             let range_metadata = 0..plaintext.shape()[1];
-            let sample_traces = leakages
+            let sample_traces = traces
                 .slice(s![range_rows.clone(), range_samples])
                 .map(|l| *l as f32);
             let sample_metadata = plaintext.slice(s![range_rows, range_metadata]);

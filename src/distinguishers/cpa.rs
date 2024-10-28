@@ -9,10 +9,10 @@ use std::{iter::zip, ops::Add};
 /// Compute the [`Cpa`] of the given traces using [`CpaProcessor`].
 ///
 /// # Panics
-/// - Panic if `leakages.shape()[0] != plaintexts.shape()[0]`
+/// - Panic if `traces.shape()[0] != plaintexts.shape()[0]`
 /// - Panic if `batch_size` is 0.
 pub fn cpa<T, F>(
-    leakages: ArrayView2<T>,
+    traces: ArrayView2<T>,
     plaintexts: ArrayView2<T>,
     guess_range: usize,
     target_byte: usize,
@@ -23,20 +23,20 @@ where
     T: Into<usize> + Copy + Sync,
     F: Fn(usize, usize) -> usize + Send + Sync + Copy,
 {
-    assert_eq!(leakages.shape()[0], plaintexts.shape()[0]);
+    assert_eq!(traces.shape()[0], plaintexts.shape()[0]);
     assert!(batch_size > 0);
 
     // From benchmarks fold + reduce_with is faster than map + reduce/reduce_with and fold + reduce
     zip(
-        leakages.axis_chunks_iter(Axis(0), batch_size),
+        traces.axis_chunks_iter(Axis(0), batch_size),
         plaintexts.axis_chunks_iter(Axis(0), batch_size),
     )
     .par_bridge()
     .fold(
-        || CpaProcessor::new(leakages.shape()[1], guess_range, target_byte, leakage_func),
-        |mut cpa, (leakage_batch, plaintext_batch)| {
-            for i in 0..leakage_batch.shape()[0] {
-                cpa.update(leakage_batch.row(i), plaintext_batch.row(i));
+        || CpaProcessor::new(traces.shape()[1], guess_range, target_byte, leakage_func),
+        |mut cpa, (trace_batch, plaintext_batch)| {
+            for i in 0..trace_batch.shape()[0] {
+                cpa.update(trace_batch.row(i), plaintext_batch.row(i));
             }
 
             cpa
@@ -96,16 +96,16 @@ where
     /// Guess range upper excluded bound
     guess_range: usize,
     /// Sum of traces
-    sum_leakages: Array1<usize>,
+    sum_traces: Array1<usize>,
     /// Sum of square of traces
-    sum_squares_leakages: Array1<usize>,
+    sum_square_traces: Array1<usize>,
     /// Sum of traces per key guess
-    guess_sum_leakages: Array1<usize>,
+    guess_sum_traces: Array1<usize>,
     /// Sum of square of traces per key guess
-    guess_sum_squares_leakages: Array1<usize>,
+    guess_sum_squares_traces: Array1<usize>,
     /// Sum of traces per plaintext used
     /// See 4.3 in <https://eprint.iacr.org/2013/794.pdf>
-    plaintext_sum_leakages: Array2<usize>,
+    plaintext_sum_traces: Array2<usize>,
     /// Leakage model
     leakage_func: F,
     /// Number of traces processed
@@ -126,11 +126,11 @@ where
             num_samples,
             target_byte,
             guess_range,
-            sum_leakages: Array1::zeros(num_samples),
-            sum_squares_leakages: Array1::zeros(num_samples),
-            guess_sum_leakages: Array1::zeros(guess_range),
-            guess_sum_squares_leakages: Array1::zeros(guess_range),
-            plaintext_sum_leakages: Array2::zeros((guess_range, num_samples)),
+            sum_traces: Array1::zeros(num_samples),
+            sum_square_traces: Array1::zeros(num_samples),
+            guess_sum_traces: Array1::zeros(guess_range),
+            guess_sum_squares_traces: Array1::zeros(guess_range),
+            plaintext_sum_traces: Array2::zeros((guess_range, num_samples)),
             leakage_func,
             num_traces: 0,
         }
@@ -146,16 +146,16 @@ where
 
         let partition = plaintext[self.target_byte].into();
         for i in 0..self.num_samples {
-            self.sum_leakages[i] += trace[i].into();
-            self.sum_squares_leakages[i] += trace[i].into() * trace[i].into();
+            self.sum_traces[i] += trace[i].into();
+            self.sum_square_traces[i] += trace[i].into() * trace[i].into();
 
-            self.plaintext_sum_leakages[[partition, i]] += trace[i].into();
+            self.plaintext_sum_traces[[partition, i]] += trace[i].into();
         }
 
         for guess in 0..self.guess_range {
             let value = (self.leakage_func)(plaintext[self.target_byte].into(), guess);
-            self.guess_sum_leakages[guess] += value;
-            self.guess_sum_squares_leakages[guess] += value * value;
+            self.guess_sum_traces[guess] += value;
+            self.guess_sum_squares_traces[guess] += value * value;
         }
 
         self.num_traces += 1;
@@ -171,26 +171,26 @@ where
                 modeled_leakages[u] = (self.leakage_func)(u, guess);
             }
 
-            let mean_key = self.guess_sum_leakages[guess] as f32 / self.num_traces as f32;
+            let mean_key = self.guess_sum_traces[guess] as f32 / self.num_traces as f32;
             let mean_squares_key =
-                self.guess_sum_squares_leakages[guess] as f32 / self.num_traces as f32;
+                self.guess_sum_squares_traces[guess] as f32 / self.num_traces as f32;
             let var_key = mean_squares_key - (mean_key * mean_key);
 
             let guess_corr: Vec<_> = (0..self.num_samples)
                 .into_par_iter()
                 .map(|u| {
-                    let mean_leakages = self.sum_leakages[u] as f32 / self.num_traces as f32;
+                    let mean_traces = self.sum_traces[u] as f32 / self.num_traces as f32;
 
                     let cov = self.sum_mult(
-                        self.plaintext_sum_leakages.slice(s![.., u]),
+                        self.plaintext_sum_traces.slice(s![.., u]),
                         modeled_leakages.view(),
                     );
-                    let cov = cov as f32 / self.num_traces as f32 - (mean_key * mean_leakages);
+                    let cov = cov as f32 / self.num_traces as f32 - (mean_key * mean_traces);
 
-                    let mean_squares_leakages =
-                        self.sum_squares_leakages[u] as f32 / self.num_traces as f32;
-                    let var_leakages = mean_squares_leakages - (mean_leakages * mean_leakages);
-                    f32::abs(cov / f32::sqrt(var_key * var_leakages))
+                    let mean_squares_traces =
+                        self.sum_square_traces[u] as f32 / self.num_traces as f32;
+                    let var_traces = mean_squares_traces - (mean_traces * mean_traces);
+                    f32::abs(cov / f32::sqrt(var_key * var_traces))
                 })
                 .collect();
 
@@ -239,12 +239,11 @@ where
             num_samples: self.num_samples,
             target_byte: self.target_byte,
             guess_range: self.guess_range,
-            sum_leakages: self.sum_leakages + rhs.sum_leakages,
-            sum_squares_leakages: self.sum_squares_leakages + rhs.sum_squares_leakages,
-            guess_sum_leakages: self.guess_sum_leakages + rhs.guess_sum_leakages,
-            guess_sum_squares_leakages: self.guess_sum_squares_leakages
-                + rhs.guess_sum_squares_leakages,
-            plaintext_sum_leakages: self.plaintext_sum_leakages + rhs.plaintext_sum_leakages,
+            sum_traces: self.sum_traces + rhs.sum_traces,
+            sum_square_traces: self.sum_square_traces + rhs.sum_square_traces,
+            guess_sum_traces: self.guess_sum_traces + rhs.guess_sum_traces,
+            guess_sum_squares_traces: self.guess_sum_squares_traces + rhs.guess_sum_squares_traces,
+            plaintext_sum_traces: self.plaintext_sum_traces + rhs.plaintext_sum_traces,
             leakage_func: self.leakage_func,
             num_traces: self.num_traces + rhs.num_traces,
         }

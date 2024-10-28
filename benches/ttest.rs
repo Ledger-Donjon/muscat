@@ -28,19 +28,19 @@ fn bench_ttest(c: &mut Criterion) {
     group.measurement_time(std::time::Duration::from_secs(60));
 
     for num_traces in [5000, 10000, 25000].into_iter() {
-        let leakages = Array2::random_using((num_traces, 5000), Uniform::new(-200, 200), &mut rng);
+        let traces = Array2::random_using((num_traces, 5000), Uniform::new(-200, 200), &mut rng);
         let plaintexts = Array1::random_using(num_traces, Standard, &mut rng);
 
         group.bench_with_input(
             BenchmarkId::new("sequential", num_traces),
-            &(&leakages, &plaintexts),
-            |b, (leakages, plaintexts)| b.iter(|| ttest_sequential(leakages, plaintexts)),
+            &(&traces, &plaintexts),
+            |b, (traces, plaintexts)| b.iter(|| ttest_sequential(traces, plaintexts)),
         );
 
         group.bench_with_input(
             BenchmarkId::new("parallel", num_traces),
-            &(&leakages, &plaintexts),
-            |b, (leakages, plaintexts)| b.iter(|| ttest_parallel(leakages, plaintexts)),
+            &(&traces, &plaintexts),
+            |b, (traces, plaintexts)| b.iter(|| ttest_parallel(traces, plaintexts)),
         );
     }
 
