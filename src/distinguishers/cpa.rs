@@ -8,6 +8,39 @@ use std::{iter::zip, ops::Add};
 
 /// Compute the [`Cpa`] of the given traces using [`CpaProcessor`].
 ///
+/// # Examples
+/// ```
+/// use muscat::distinguishers::cpa::cpa;
+/// use muscat::leakage::sbox;
+/// use ndarray::array;
+///
+/// let traces = array![
+///     [77, 137, 51, 91],
+///     [72, 61, 91, 83],
+///     [39, 49, 52, 23],
+///     [26, 114, 63, 45],
+///     [30, 8, 97, 91],
+///     [13, 68, 7, 45],
+///     [17, 181, 60, 34],
+///     [43, 88, 76, 78],
+///     [0, 36, 35, 0],
+///     [93, 191, 49, 26],
+/// ];
+/// let plaintexts = array![
+///     [1usize, 2],
+///     [2, 1],
+///     [1, 2],
+///     [1, 2],
+///     [2, 1],
+///     [2, 1],
+///     [1, 2],
+///     [1, 2],
+///     [2, 1],
+///     [2, 1],
+/// ];
+/// let cpa = cpa(traces.view(), plaintexts.view(), 256, 0, |key, guess| sbox((key ^ guess) as u8) as usize, 2);
+/// ```
+///
 /// # Panics
 /// - Panic if `traces.shape()[0] != plaintexts.shape()[0]`
 /// - Panic if `batch_size` is 0.

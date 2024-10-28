@@ -6,6 +6,50 @@ use crate::util::{argmax_by, argsort_by, max_per_row};
 
 /// Compute the [`Dpa`] of the given traces using [`DpaProcessor`].
 ///
+/// # Examples
+/// ```
+/// use muscat::distinguishers::dpa::dpa;
+/// use muscat::leakage::sbox;
+/// use ndarray::{array, Array1};
+///
+/// let traces = array![
+///     [77, 137, 51, 91],
+///     [72, 61, 91, 83],
+///     [39, 49, 52, 23],
+///     [26, 114, 63, 45],
+///     [30, 8, 97, 91],
+///     [13, 68, 7, 45],
+///     [17, 181, 60, 34],
+///     [43, 88, 76, 78],
+///     [0, 36, 35, 0],
+///     [93, 191, 49, 26],
+/// ];
+/// let plaintexts = array![
+///     [1, 2],
+///     [2, 1],
+///     [1, 2],
+///     [1, 2],
+///     [2, 1],
+///     [2, 1],
+///     [1, 2],
+///     [1, 2],
+///     [2, 1],
+///     [2, 1],
+/// ];
+/// let dpa = dpa(
+///     traces.map(|&x| x as f32).view(),
+///     plaintexts
+///         .rows()
+///         .into_iter()
+///         .map(|x| x.to_owned())
+///         .collect::<Array1<Array1<u8>>>()
+///         .view(),
+///     256,
+///     |key: Array1<u8>, guess| sbox(key[0] ^ guess as u8) & 1 == 1,
+///     2
+/// );
+/// ```
+///
 /// # Panics
 /// Panic if `batch_size` is not strictly positive.
 pub fn dpa<M, T, F>(

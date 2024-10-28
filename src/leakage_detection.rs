@@ -8,6 +8,38 @@ use std::{iter::zip, ops::Add};
 ///
 /// `get_class` is a function returning the class of the given trace by index.
 ///
+/// # Examples
+/// ```
+/// use muscat::leakage_detection::snr;
+/// use ndarray::array;
+///
+/// let traces = array![
+///     [77, 137, 51, 91],
+///     [72, 61, 91, 83],
+///     [39, 49, 52, 23],
+///     [26, 114, 63, 45],
+///     [30, 8, 97, 91],
+///     [13, 68, 7, 45],
+///     [17, 181, 60, 34],
+///     [43, 88, 76, 78],
+///     [0, 36, 35, 0],
+///     [93, 191, 49, 26],
+/// ];
+/// let plaintexts = array![
+///     [1usize, 2],
+///     [2, 1],
+///     [1, 2],
+///     [1, 2],
+///     [2, 1],
+///     [2, 1],
+///     [1, 2],
+///     [1, 2],
+///     [2, 1],
+///     [2, 1],
+/// ];
+/// let snr = snr(traces.view(), 256, |i| plaintexts.row(i)[0].into(), 2);
+/// ```
+///
 /// # Panics
 /// - Panic if `batch_size` is 0.
 pub fn snr<T, F>(
@@ -146,6 +178,28 @@ impl Add for SnrProcessor {
 }
 
 /// Compute the Welch's T-test of the given traces using [`TTestProcessor`].
+///
+/// # Examples
+/// ```
+/// use muscat::leakage_detection::ttest;
+/// use ndarray::array;
+///
+/// let traces = array![
+///     [77, 137, 51, 91],
+///     [72, 61, 91, 83],
+///     [39, 49, 52, 23],
+///     [26, 114, 63, 45],
+///     [30, 8, 97, 91],
+///     [13, 68, 7, 45],
+///     [17, 181, 60, 34],
+///     [43, 88, 76, 78],
+///     [0, 36, 35, 0],
+///     [93, 191, 49, 26],
+/// ];
+/// let trace_classes =
+///     array![true, false, false, true, false, false, true, false, false, true];
+/// let ttest = ttest(traces.view(), trace_classes.view(), 2);
+/// ```
 ///
 /// # Panics
 /// - Panic if `traces.shape()[0] != trace_classes.shape()[0]`
