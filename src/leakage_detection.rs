@@ -63,7 +63,7 @@ where
             || SnrProcessor::new(traces.shape()[1], classes),
             |mut snr, (batch_idx, trace_batch)| {
                 for i in 0..trace_batch.shape()[0] {
-                    snr.process(trace_batch.row(i), get_class(batch_idx + i));
+                    snr.process(trace_batch.row(i), get_class(batch_idx * batch_size + i));
                 }
                 snr
             },
