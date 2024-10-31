@@ -245,3 +245,48 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::iter::zip;
+
+    use super::{cpa, CpaProcessor};
+    use ndarray::{array, ArrayView1, Axis};
+
+    #[test]
+    fn test_cpa_helper() {
+        let traces = array![
+            [77usize, 137, 51, 91],
+            [72, 61, 91, 83],
+            [39, 49, 52, 23],
+            [26, 114, 63, 45],
+            [30, 8, 97, 91],
+            [13, 68, 7, 45],
+            [17, 181, 60, 34],
+            [43, 88, 76, 78],
+            [0, 36, 35, 0],
+            [93, 191, 49, 26],
+        ];
+        let plaintexts = array![[1usize], [3], [1], [2], [3], [2], [2], [1], [3], [1]];
+
+        let leakage_model = |plaintext: ArrayView1<usize>, guess| plaintext[0] ^ guess;
+        let mut processor = CpaProcessor::new(traces.shape()[1], 1, 256, leakage_model);
+        for (trace, plaintext) in zip(
+            traces.axis_chunks_iter(Axis(0), 1),
+            plaintexts.axis_chunks_iter(Axis(0), 1),
+        ) {
+            processor.update(trace.map(|&x| x as f32).view(), plaintext.view());
+        }
+        assert_eq!(
+            processor.finalize().corr(),
+            cpa(
+                traces.map(|&x| x as f32).view(),
+                plaintexts.view(),
+                256,
+                leakage_model,
+                2
+            )
+            .corr()
+        );
+    }
+}

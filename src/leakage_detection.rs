@@ -317,12 +317,34 @@ impl Add for TTestProcessor {
 
 #[cfg(test)]
 mod tests {
-    use super::{ttest, TTestProcessor};
+    use super::{snr, ttest, SnrProcessor, TTestProcessor};
     use ndarray::array;
 
     #[test]
+    fn test_snr_helper() {
+        let traces = array![
+            [77, 137, 51, 91],
+            [72, 61, 91, 83],
+            [39, 49, 52, 23],
+            [26, 114, 63, 45],
+            [30, 8, 97, 91],
+            [13, 68, 7, 45],
+            [17, 181, 60, 34],
+            [43, 88, 76, 78],
+            [0, 36, 35, 0],
+            [93, 191, 49, 26],
+        ];
+        let classes = [1, 3, 1, 2, 3, 2, 2, 1, 3, 1];
+
+        let mut processor = SnrProcessor::new(traces.shape()[1], 256);
+        for (trace, class) in std::iter::zip(traces.rows(), classes.iter()) {
+            processor.process(trace, *class);
+        }
+        assert_eq!(processor.snr(), snr(traces.view(), 256, |i| classes[i], 2));
+    }
+
+    #[test]
     fn test_ttest() {
-        let mut processor = TTestProcessor::new(4);
         let traces = [
             array![77, 137, 51, 91],
             array![72, 61, 91, 83],
@@ -335,9 +357,12 @@ mod tests {
             array![0, 36, 35, 0],
             array![93, 191, 49, 26],
         ];
+
+        let mut processor = TTestProcessor::new(4);
         for (i, trace) in traces.iter().enumerate() {
             processor.process(trace.view(), i % 3 == 0);
         }
+
         assert_eq!(
             processor.ttest(),
             array![
@@ -351,7 +376,6 @@ mod tests {
 
     #[test]
     fn test_ttest_helper() {
-        let mut processor = TTestProcessor::new(4);
         let traces = array![
             [77, 137, 51, 91],
             [72, 61, 91, 83],
@@ -366,6 +390,8 @@ mod tests {
         ];
         let trace_classes =
             array![true, false, false, true, false, false, true, false, false, true];
+
+        let mut processor = TTestProcessor::new(4);
         for (i, trace) in traces.rows().into_iter().enumerate() {
             processor.process(trace, trace_classes[i]);
         }

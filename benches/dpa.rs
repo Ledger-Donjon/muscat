@@ -1,12 +1,12 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use muscat::distinguishers::dpa::{dpa, Dpa, DpaProcessor};
 use muscat::leakage::sbox;
-use ndarray::{Array1, Array2};
+use ndarray::{Array1, Array2, ArrayView1};
 use ndarray_rand::rand::{rngs::StdRng, SeedableRng};
 use ndarray_rand::rand_distr::Uniform;
 use ndarray_rand::RandomExt;
 
-fn selection_function(metadata: Array1<u8>, guess: usize) -> bool {
+fn selection_function(metadata: ArrayView1<u8>, guess: usize) -> bool {
     usize::from(sbox(metadata[1] ^ guess as u8)) & 1 == 1
 }
 
@@ -14,7 +14,7 @@ fn dpa_sequential(traces: &Array2<f32>, plaintexts: &Array2<u8>) -> Dpa {
     let mut dpa = DpaProcessor::new(traces.shape()[1], 256, selection_function);
 
     for i in 0..traces.shape()[0] {
-        dpa.update(traces.row(i), plaintexts.row(i).to_owned());
+        dpa.update(traces.row(i), plaintexts.row(i));
     }
 
     dpa.finalize()
@@ -26,8 +26,7 @@ fn dpa_parallel(traces: &Array2<f32>, plaintexts: &Array2<u8>) -> Dpa {
         plaintexts
             .rows()
             .into_iter()
-            .map(|x| x.to_owned())
-            .collect::<Array1<Array1<u8>>>()
+            .collect::<Array1<ArrayView1<u8>>>()
             .view(),
         256,
         selection_function,
