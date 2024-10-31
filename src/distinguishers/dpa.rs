@@ -245,3 +245,48 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{dpa, DpaProcessor};
+    use ndarray::{array, Array1, ArrayView1};
+
+    #[test]
+    fn test_dpa_helper() {
+        let traces = array![
+            [77usize, 137, 51, 91],
+            [72, 61, 91, 83],
+            [39, 49, 52, 23],
+            [26, 114, 63, 45],
+            [30, 8, 97, 91],
+            [13, 68, 7, 45],
+            [17, 181, 60, 34],
+            [43, 88, 76, 78],
+            [0, 36, 35, 0],
+            [93, 191, 49, 26],
+        ];
+        let plaintexts = array![[1], [3], [1], [2], [3], [2], [2], [1], [3], [1]];
+
+        let selection_function =
+            |plaintext: ArrayView1<u8>, guess| (plaintext[0] as usize ^ guess) & 1 == 1;
+        let mut processor = DpaProcessor::new(traces.shape()[1], 256, selection_function);
+        for i in 0..traces.shape()[0] {
+            processor.update(traces.row(i).map(|&x| x as f32).view(), plaintexts.row(i));
+        }
+        assert_eq!(
+            processor.finalize().differential_curves(),
+            dpa(
+                traces.view().map(|&x| x as f32).view(),
+                plaintexts
+                    .rows()
+                    .into_iter()
+                    .collect::<Array1<ArrayView1<u8>>>()
+                    .view(),
+                256,
+                selection_function,
+                2
+            )
+            .differential_curves()
+        );
+    }
+}

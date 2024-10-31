@@ -282,3 +282,36 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{cpa, CpaProcessor};
+    use ndarray::array;
+
+    #[test]
+    fn test_cpa_helper() {
+        let traces = array![
+            [77usize, 137, 51, 91],
+            [72, 61, 91, 83],
+            [39, 49, 52, 23],
+            [26, 114, 63, 45],
+            [30, 8, 97, 91],
+            [13, 68, 7, 45],
+            [17, 181, 60, 34],
+            [43, 88, 76, 78],
+            [0, 36, 35, 0],
+            [93, 191, 49, 26],
+        ];
+        let plaintexts = array![[1usize], [3], [1], [2], [3], [2], [2], [1], [3], [1]];
+
+        let leakage_model = |value, guess| value ^ guess;
+        let mut processor = CpaProcessor::new(traces.shape()[1], 256, 0, leakage_model);
+        for i in 0..traces.shape()[0] {
+            processor.update(traces.row(i), plaintexts.row(i));
+        }
+        assert_eq!(
+            processor.finalize().corr(),
+            cpa(traces.view(), plaintexts.view(), 256, 0, leakage_model, 2).corr()
+        );
+    }
+}
