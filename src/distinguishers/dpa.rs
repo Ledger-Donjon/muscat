@@ -1,5 +1,6 @@
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
 use rayon::iter::{ParallelBridge, ParallelIterator};
+use serde::{Deserialize, Serialize};
 use std::{iter::zip, marker::PhantomData, ops::Add};
 
 use crate::util::{argmax_by, argsort_by, max_per_row};
@@ -246,10 +247,64 @@ where
     }
 }
 
+/// This type implements [`Deserialize`] on the subset of fields of [`DpaProcessor`] that are
+/// serializable.
+///
+/// [`DpaProcessor<M, F>`] cannot implement [`Deserialize`] for every type `F` as it does not
+/// implement [`Default`]. One solution would be to erase the type, but that would add an
+/// indirection which could hurt the performance (not benchmarked though).
+#[derive(Serialize, Deserialize)]
+pub struct DpaProcessorSerdeAdapter {
+    num_samples: usize,
+    guess_range: usize,
+    sum_0: Array2<f32>,
+    sum_1: Array2<f32>,
+    count_0: Array1<usize>,
+    count_1: Array1<usize>,
+    num_traces: usize,
+}
+
+impl DpaProcessorSerdeAdapter {
+    pub fn with<M, F>(self, selection_function: F) -> DpaProcessor<M, F>
+    where
+        F: Fn(M, usize) -> bool,
+    {
+        DpaProcessor {
+            num_samples: self.num_samples,
+            guess_range: self.guess_range,
+            sum_0: self.sum_0,
+            sum_1: self.sum_1,
+            count_0: self.count_0,
+            count_1: self.count_1,
+            selection_function,
+            num_traces: self.num_traces,
+            _metadata: PhantomData,
+        }
+    }
+}
+
+impl<M, F> From<&DpaProcessor<M, F>> for DpaProcessorSerdeAdapter
+where
+    F: Fn(M, usize) -> bool,
+{
+    fn from(processor: &DpaProcessor<M, F>) -> Self {
+        Self {
+            num_samples: processor.num_samples,
+            guess_range: processor.guess_range,
+            sum_0: processor.sum_0.clone(),
+            sum_1: processor.sum_1.clone(),
+            count_0: processor.count_0.clone(),
+            count_1: processor.count_1.clone(),
+            num_traces: processor.num_traces,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{dpa, DpaProcessor};
+    use super::{dpa, DpaProcessor, DpaProcessorSerdeAdapter};
     use ndarray::{array, Array1, ArrayView1};
+    use serde::Deserialize;
 
     #[test]
     fn test_dpa_helper() {
@@ -288,5 +343,44 @@ mod tests {
             )
             .differential_curves()
         );
+    }
+
+    #[test]
+    fn test_serialize_deserialize_processor() {
+        let traces = array![
+            [77usize, 137, 51, 91],
+            [72, 61, 91, 83],
+            [39, 49, 52, 23],
+            [26, 114, 63, 45],
+            [30, 8, 97, 91],
+            [13, 68, 7, 45],
+            [17, 181, 60, 34],
+            [43, 88, 76, 78],
+            [0, 36, 35, 0],
+            [93, 191, 49, 26],
+        ];
+        let plaintexts = array![[1], [3], [1], [2], [3], [2], [2], [1], [3], [1]];
+
+        let selection_function =
+            |plaintext: ArrayView1<u8>, guess| (plaintext[0] as usize ^ guess) & 1 == 1;
+        let mut processor = DpaProcessor::new(traces.shape()[1], 256, selection_function);
+        for i in 0..traces.shape()[0] {
+            processor.update(traces.row(i).map(|&x| x as f32).view(), plaintexts.row(i));
+        }
+
+        let serialized =
+            serde_json::to_string(&DpaProcessorSerdeAdapter::from(&processor)).unwrap();
+        let mut deserializer = serde_json::Deserializer::from_str(serialized.as_str());
+        let restored_processor = DpaProcessorSerdeAdapter::deserialize(&mut deserializer)
+            .unwrap()
+            .with(selection_function);
+
+        assert_eq!(processor.num_samples, restored_processor.num_samples);
+        assert_eq!(processor.guess_range, restored_processor.guess_range);
+        assert_eq!(processor.sum_0, restored_processor.sum_0);
+        assert_eq!(processor.sum_1, restored_processor.sum_1);
+        assert_eq!(processor.count_0, restored_processor.count_0);
+        assert_eq!(processor.count_1, restored_processor.count_1);
+        assert_eq!(processor.num_traces, restored_processor.num_traces);
     }
 }
