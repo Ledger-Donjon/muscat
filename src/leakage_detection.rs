@@ -2,6 +2,7 @@
 use crate::processors::MeanVar;
 use ndarray::{s, Array1, Array2, ArrayView1, ArrayView2, Axis};
 use rayon::iter::{ParallelBridge, ParallelIterator};
+use serde::{Deserialize, Serialize};
 use std::{iter::zip, ops::Add};
 
 /// Compute the SNR of the given traces using [`SnrProcessor`].
@@ -74,7 +75,7 @@ where
 }
 
 /// A Processor that computes the Signal-to-Noise Ratio of the given traces
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SnrProcessor {
     mean_var: MeanVar,
     /// Sum of traces per class
@@ -235,7 +236,7 @@ where
 }
 
 /// A Processor that computes the Welch's T-Test of the given traces.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TTestProcessor {
     mean_var_1: MeanVar,
     mean_var_2: MeanVar,

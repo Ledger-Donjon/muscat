@@ -14,10 +14,10 @@ progress_bar = ["dep:indicatif"]
 quicklog = ["dep:thiserror"]
 
 [dependencies]
-serde_json = "1.0.115"
+serde_json = "1.0.132"
 hex = "0.4.3"
 npyz = "0.8.3"
-ndarray = "0.16.1"
+ndarray = { version = "0.16.1", features = ["serde"] }
 rayon = "1.10.0"
 indicatif = { version = "0.17.8", optional = true }
 ndarray-npy ="0.9.1"
@@ -25,6 +25,7 @@ itertools = "0.13.0"
 thiserror = { version = "1.0.58", optional = true }
 dtw = { git = "https://github.com/Ledger-Donjon/dtw.git", rev = "0f8d7ec3bbdf2ca4ec8ea35feddb8d1db73e7d54" }
 num-traits = "0.2.19"
+serde = { version = "1.0.214", features = ["derive"] }
 
 [dev-dependencies]
 criterion = "0.5.1"

@@ -1,9 +1,10 @@
 //! Traces processing algorithms
 use ndarray::{Array1, ArrayView1};
+use serde::{Deserialize, Serialize};
 use std::{iter::zip, ops::Add};
 
 /// Processes traces to calculate mean and variance.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MeanVar {
     /// Sum of traces
     sum: Array1<i64>,
