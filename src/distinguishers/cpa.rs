@@ -4,6 +4,7 @@ use rayon::{
     iter::ParallelBridge,
     prelude::{IntoParallelIterator, ParallelIterator},
 };
+use serde::{Deserialize, Serialize};
 use std::{iter::zip, ops::Add};
 
 /// Compute the [`Cpa`] of the given traces using [`CpaProcessor`].
@@ -119,6 +120,7 @@ impl Cpa {
 /// It implements algorithm 4 from [^1].
 ///
 /// [^1]: <https://eprint.iacr.org/2013/794.pdf>
+#[derive(Debug, PartialEq)]
 pub struct CpaProcessor<F>
 where
     F: Fn(usize, usize) -> usize,
@@ -285,10 +287,69 @@ where
     }
 }
 
+/// This type implements [`Deserialize`] on the subset of fields of [`CpaProcessor`] that are
+/// serializable.
+///
+/// [`CpaProcessor<F>`] cannot implement [`Deserialize`] for every type `F` as it does not
+/// implement [`Default`]. One solution would be to erase the type, but that would add an
+/// indirection which could hurt the performance (not benchmarked though).
+#[derive(Serialize, Deserialize)]
+pub struct CpaProcessorSerdeAdapter {
+    num_samples: usize,
+    target_byte: usize,
+    guess_range: usize,
+    sum_traces: Array1<usize>,
+    sum_square_traces: Array1<usize>,
+    guess_sum_traces: Array1<usize>,
+    guess_sum_squares_traces: Array1<usize>,
+    plaintext_sum_traces: Array2<usize>,
+    num_traces: usize,
+}
+
+impl CpaProcessorSerdeAdapter {
+    pub fn with<F>(self, leakage_func: F) -> CpaProcessor<F>
+    where
+        F: Fn(usize, usize) -> usize,
+    {
+        CpaProcessor {
+            num_samples: self.num_samples,
+            target_byte: self.target_byte,
+            guess_range: self.guess_range,
+            sum_traces: self.sum_traces,
+            sum_square_traces: self.sum_square_traces,
+            guess_sum_traces: self.guess_sum_traces,
+            guess_sum_squares_traces: self.guess_sum_squares_traces,
+            plaintext_sum_traces: self.plaintext_sum_traces,
+            leakage_func,
+            num_traces: self.num_traces,
+        }
+    }
+}
+
+impl<F> From<&CpaProcessor<F>> for CpaProcessorSerdeAdapter
+where
+    F: Fn(usize, usize) -> usize,
+{
+    fn from(processor: &CpaProcessor<F>) -> Self {
+        Self {
+            num_samples: processor.num_samples,
+            target_byte: processor.target_byte,
+            guess_range: processor.guess_range,
+            sum_traces: processor.sum_traces.clone(),
+            sum_square_traces: processor.sum_square_traces.clone(),
+            guess_sum_traces: processor.guess_sum_traces.clone(),
+            guess_sum_squares_traces: processor.guess_sum_squares_traces.clone(),
+            plaintext_sum_traces: processor.plaintext_sum_traces.clone(),
+            num_traces: processor.num_traces,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{cpa, CpaProcessor};
+    use super::{cpa, CpaProcessor, CpaProcessorSerdeAdapter};
     use ndarray::array;
+    use serde::Deserialize;
 
     #[test]
     fn test_cpa_helper() {
@@ -315,5 +376,57 @@ mod tests {
             processor.finalize().corr(),
             cpa(traces.view(), plaintexts.view(), 256, 0, leakage_model, 2).corr()
         );
+    }
+
+    #[test]
+    fn test_serialize_deserialize_processor() {
+        let traces = array![
+            [77usize, 137, 51, 91],
+            [72, 61, 91, 83],
+            [39, 49, 52, 23],
+            [26, 114, 63, 45],
+            [30, 8, 97, 91],
+            [13, 68, 7, 45],
+            [17, 181, 60, 34],
+            [43, 88, 76, 78],
+            [0, 36, 35, 0],
+            [93, 191, 49, 26],
+        ];
+        let plaintexts = array![[1usize], [3], [1], [2], [3], [2], [2], [1], [3], [1]];
+
+        let leakage_model = |value, guess| value ^ guess;
+        let mut processor = CpaProcessor::new(traces.shape()[1], 256, 0, leakage_model);
+        for i in 0..traces.shape()[0] {
+            processor.update(traces.row(i), plaintexts.row(i));
+        }
+
+        let serialized =
+            serde_json::to_string(&CpaProcessorSerdeAdapter::from(&processor)).unwrap();
+        let mut deserializer = serde_json::Deserializer::from_str(serialized.as_str());
+        let restored_processor = CpaProcessorSerdeAdapter::deserialize(&mut deserializer)
+            .unwrap()
+            .with(leakage_model);
+
+        assert_eq!(processor.num_samples, restored_processor.num_samples);
+        assert_eq!(processor.target_byte, restored_processor.target_byte);
+        assert_eq!(processor.guess_range, restored_processor.guess_range);
+        assert_eq!(processor.sum_traces, restored_processor.sum_traces);
+        assert_eq!(
+            processor.sum_square_traces,
+            restored_processor.sum_square_traces
+        );
+        assert_eq!(
+            processor.guess_sum_traces,
+            restored_processor.guess_sum_traces
+        );
+        assert_eq!(
+            processor.guess_sum_squares_traces,
+            restored_processor.guess_sum_squares_traces
+        );
+        assert_eq!(
+            processor.plaintext_sum_traces,
+            restored_processor.plaintext_sum_traces
+        );
+        assert_eq!(processor.num_traces, restored_processor.num_traces);
     }
 }
