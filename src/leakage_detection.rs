@@ -1,8 +1,9 @@
 //! Leakage detection methods
-use crate::processors::MeanVar;
+use crate::{processors::MeanVar, Error};
 use ndarray::{s, Array1, Array2, ArrayView1, ArrayView2, Axis};
 use rayon::iter::{ParallelBridge, ParallelIterator};
-use std::{iter::zip, ops::Add};
+use serde::{Deserialize, Serialize};
+use std::{fs::File, iter::zip, ops::Add, path::Path};
 
 /// Compute the SNR of the given traces using [`SnrProcessor`].
 ///
@@ -74,7 +75,7 @@ where
 }
 
 /// A Processor that computes the Signal-to-Noise Ratio of the given traces
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SnrProcessor {
     mean_var: MeanVar,
     /// Sum of traces per class
@@ -147,6 +148,30 @@ impl SnrProcessor {
     /// Return the number of classes handled.
     pub fn num_classes(&self) -> usize {
         self.classes_count.len()
+    }
+
+    /// Save the [`SnrProcessor`] to a file.
+    ///
+    /// # Warning
+    /// The file format is not stable as muscat is active development. Thus, the format might
+    /// change between versions.
+    pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), Error> {
+        let file = File::create(path)?;
+        serde_json::to_writer(file, self)?;
+
+        Ok(())
+    }
+
+    /// Load a [`SnrProcessor`] from a file.
+    ///
+    /// # Warning
+    /// The file format is not stable as muscat is active development. Thus, the format might
+    /// change between versions.
+    pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        let file = File::open(path)?;
+        let p = serde_json::from_reader(file)?;
+
+        Ok(p)
     }
 
     /// Determine if two [`SnrProcessor`] are compatible for addition.
@@ -235,7 +260,7 @@ where
 }
 
 /// A Processor that computes the Welch's T-Test of the given traces.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TTestProcessor {
     mean_var_1: MeanVar,
     mean_var_2: MeanVar,
@@ -286,6 +311,30 @@ impl TTestProcessor {
     /// Return the trace size handled.
     pub fn size(&self) -> usize {
         self.mean_var_1.size()
+    }
+
+    /// Save the [`TTestProcessor`] to a file.
+    ///
+    /// # Warning
+    /// The file format is not stable as muscat is active development. Thus, the format might
+    /// change between versions.
+    pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), Error> {
+        let file = File::create(path)?;
+        serde_json::to_writer(file, self)?;
+
+        Ok(())
+    }
+
+    /// Load a [`TTestProcessor`] from a file.
+    ///
+    /// # Warning
+    /// The file format is not stable as muscat is active development. Thus, the format might
+    /// change between versions.
+    pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        let file = File::open(path)?;
+        let p = serde_json::from_reader(file)?;
+
+        Ok(p)
     }
 
     /// Determine if two [`TTestProcessor`] are compatible for addition.
