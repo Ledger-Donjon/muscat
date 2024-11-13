@@ -1,9 +1,9 @@
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use serde::{Deserialize, Serialize};
-use std::{iter::zip, ops::Add};
+use std::{fs::File, iter::zip, ops::Add, path::Path};
 
-use crate::distinguishers::cpa::Cpa;
+use crate::{distinguishers::cpa::Cpa, Error};
 
 /// Compute the [`Cpa`] of the given traces using [`CpaProcessor`].
 ///
@@ -201,6 +201,30 @@ where
         }
 
         Cpa { corr }
+    }
+
+    /// Save the [`CpaProcessor`] to a file.
+    ///
+    /// # Warning
+    /// The file format is not stable as muscat is active development. Thus, the format might
+    /// change between versions.
+    pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), Error> {
+        let file = File::create(path)?;
+        serde_json::to_writer(file, &CpaProcessorSerdeAdapter::from(self))?;
+
+        Ok(())
+    }
+
+    /// Load a [`CpaProcessor`] from a file.
+    ///
+    /// # Warning
+    /// The file format is not stable as muscat is active development. Thus, the format might
+    /// change between versions.
+    pub fn load<P: AsRef<Path>>(path: P, leakage_func: F) -> Result<Self, Error> {
+        let file = File::open(path)?;
+        let p: CpaProcessorSerdeAdapter = serde_json::from_reader(file)?;
+
+        Ok(p.with(leakage_func))
     }
 
     /// Determine if two [`CpaProcessor`] are compatible for addition.
