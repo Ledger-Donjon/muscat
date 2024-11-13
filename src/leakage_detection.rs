@@ -1,9 +1,9 @@
 //! Leakage detection methods
-use crate::processors::MeanVar;
+use crate::{processors::MeanVar, Error};
 use ndarray::{s, Array1, Array2, ArrayView1, ArrayView2, Axis};
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use serde::{Deserialize, Serialize};
-use std::{iter::zip, ops::Add};
+use std::{fs::File, iter::zip, ops::Add, path::Path};
 
 /// Compute the SNR of the given traces using [`SnrProcessor`].
 ///
@@ -150,6 +150,30 @@ impl SnrProcessor {
         self.classes_count.len()
     }
 
+    /// Save the [`SnrProcessor`] to a file.
+    ///
+    /// # Warning
+    /// The file format is not stable as muscat is active development. Thus, the format might
+    /// change between versions.
+    pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), Error> {
+        let file = File::create(path)?;
+        serde_json::to_writer(file, self)?;
+
+        Ok(())
+    }
+
+    /// Load a [`SnrProcessor`] from a file.
+    ///
+    /// # Warning
+    /// The file format is not stable as muscat is active development. Thus, the format might
+    /// change between versions.
+    pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        let file = File::open(path)?;
+        let p = serde_json::from_reader(file)?;
+
+        Ok(p)
+    }
+
     /// Determine if two [`SnrProcessor`] are compatible for addition.
     ///
     /// If they were created with the same parameters, they are compatible.
@@ -287,6 +311,30 @@ impl TTestProcessor {
     /// Return the trace size handled.
     pub fn size(&self) -> usize {
         self.mean_var_1.size()
+    }
+
+    /// Save the [`TTestProcessor`] to a file.
+    ///
+    /// # Warning
+    /// The file format is not stable as muscat is active development. Thus, the format might
+    /// change between versions.
+    pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), Error> {
+        let file = File::create(path)?;
+        serde_json::to_writer(file, self)?;
+
+        Ok(())
+    }
+
+    /// Load a [`TTestProcessor`] from a file.
+    ///
+    /// # Warning
+    /// The file format is not stable as muscat is active development. Thus, the format might
+    /// change between versions.
+    pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        let file = File::open(path)?;
+        let p = serde_json::from_reader(file)?;
+
+        Ok(p)
     }
 
     /// Determine if two [`TTestProcessor`] are compatible for addition.

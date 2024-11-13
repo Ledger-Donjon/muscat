@@ -1,9 +1,12 @@
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use serde::{Deserialize, Serialize};
-use std::{iter::zip, marker::PhantomData, ops::Add};
+use std::{fs::File, iter::zip, marker::PhantomData, ops::Add, path::Path};
 
-use crate::util::{argmax_by, argsort_by, max_per_row};
+use crate::{
+    util::{argmax_by, argsort_by, max_per_row},
+    Error,
+};
 
 /// Compute the [`Dpa`] of the given traces using [`DpaProcessor`].
 ///
@@ -204,6 +207,30 @@ where
         Dpa {
             differential_curves,
         }
+    }
+
+    /// Save the [`DpaProcessor`] to a file.
+    ///
+    /// # Warning
+    /// The file format is not stable as muscat is active development. Thus, the format might
+    /// change between versions.
+    pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), Error> {
+        let file = File::create(path)?;
+        serde_json::to_writer(file, &DpaProcessorSerdeAdapter::from(self))?;
+
+        Ok(())
+    }
+
+    /// Load a [`DpaProcessor`] from a file.
+    ///
+    /// # Warning
+    /// The file format is not stable as muscat is active development. Thus, the format might
+    /// change between versions.
+    pub fn load<P: AsRef<Path>>(path: P, selection_function: F) -> Result<Self, Error> {
+        let file = File::open(path)?;
+        let p: DpaProcessorSerdeAdapter = serde_json::from_reader(file)?;
+
+        Ok(p.with(selection_function))
     }
 
     /// Determine if two [`DpaProcessor`] are compatible for addition.
