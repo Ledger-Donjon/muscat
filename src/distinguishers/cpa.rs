@@ -11,7 +11,7 @@ use std::{iter::zip, ops::Add};
 /// # Examples
 /// ```
 /// use muscat::distinguishers::cpa::cpa;
-/// use muscat::leakage::sbox;
+/// use muscat::leakage_model::sbox;
 /// use ndarray::array;
 ///
 /// let traces = array![
