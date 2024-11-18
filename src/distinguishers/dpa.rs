@@ -9,7 +9,7 @@ use crate::util::{argmax_by, argsort_by, max_per_row};
 /// # Examples
 /// ```
 /// use muscat::distinguishers::dpa::dpa;
-/// use muscat::leakage_model::sbox;
+/// use muscat::leakage_model::aes::sbox;
 /// use ndarray::{array, Array1};
 ///
 /// let traces = array![

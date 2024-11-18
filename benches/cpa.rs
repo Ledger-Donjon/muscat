@@ -1,7 +1,7 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use muscat::distinguishers::cpa::{self, Cpa, CpaProcessor};
 use muscat::distinguishers::cpa_normal;
-use muscat::leakage_model::{hw, sbox};
+use muscat::leakage_model::{aes::sbox, hw};
 use ndarray::{Array2, ArrayView1, Axis};
 use ndarray_rand::rand::{rngs::StdRng, SeedableRng};
 use ndarray_rand::rand_distr::Uniform;

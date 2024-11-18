@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use muscat::distinguishers::dpa::{dpa, Dpa, DpaProcessor};
-use muscat::leakage_model::sbox;
+use muscat::leakage_model::aes::sbox;
 use ndarray::{Array1, Array2, ArrayView1};
 use ndarray_rand::rand::{rngs::StdRng, SeedableRng};
 use ndarray_rand::rand_distr::Uniform;
