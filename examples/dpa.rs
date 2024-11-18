@@ -1,7 +1,7 @@
 use anyhow::Result;
 use indicatif::ProgressIterator;
 use muscat::distinguishers::dpa::DpaProcessor;
-use muscat::leakage::sbox;
+use muscat::leakage_model::sbox;
 use muscat::util::read_array2_from_npy_file;
 use ndarray::{s, Array1};
 use rayon::iter::{ParallelBridge, ParallelIterator};

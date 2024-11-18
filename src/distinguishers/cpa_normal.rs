@@ -9,7 +9,7 @@ use crate::distinguishers::cpa::Cpa;
 /// # Examples
 /// ```
 /// use muscat::distinguishers::cpa_normal::cpa;
-/// use muscat::leakage::sbox;
+/// use muscat::leakage_model::sbox;
 /// use ndarray::array;
 ///
 /// let traces = array![
