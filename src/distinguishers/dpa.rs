@@ -76,10 +76,14 @@ where
     )
     .par_bridge()
     .fold(
-        || DpaProcessor::new(traces.shape()[1], guess_range, selection_function),
+        || DpaProcessor::new(traces.shape()[1], guess_range),
         |mut dpa, (trace_batch, metadata_batch)| {
             for i in 0..trace_batch.shape()[0] {
-                dpa.update(trace_batch.row(i), metadata_batch[i].clone());
+                dpa.update(
+                    trace_batch.row(i),
+                    metadata_batch[i].clone(),
+                    selection_function,
+                );
             }
 
             dpa
@@ -126,10 +130,8 @@ impl Dpa {
 ///
 /// [^1]: <https://paulkocher.com/doc/DifferentialPowerAnalysis.pdf>
 /// [^2]: <https://web.mit.edu/6.857/OldStuff/Fall03/ref/kocher-DPATechInfo.pdf>
-pub struct DpaProcessor<M, F>
-where
-    F: Fn(M, usize) -> bool,
-{
+#[derive(Serialize, Deserialize)]
+pub struct DpaProcessor<M> {
     /// Number of samples per trace
     num_samples: usize,
     /// Guess range upper excluded bound
@@ -142,18 +144,16 @@ where
     count_0: Array1<usize>,
     /// Number of traces processed for which the selection function equals true
     count_1: Array1<usize>,
-    selection_function: F,
     /// Number of traces processed
     num_traces: usize,
     _metadata: PhantomData<M>,
 }
 
-impl<M, F> DpaProcessor<M, F>
+impl<M> DpaProcessor<M>
 where
     M: Clone,
-    F: Fn(M, usize) -> bool,
 {
-    pub fn new(num_samples: usize, guess_range: usize, selection_function: F) -> Self {
+    pub fn new(num_samples: usize, guess_range: usize) -> Self {
         Self {
             num_samples,
             guess_range,
@@ -161,7 +161,6 @@ where
             sum_1: Array2::zeros((guess_range, num_samples)),
             count_0: Array1::zeros(guess_range),
             count_1: Array1::zeros(guess_range),
-            selection_function,
             num_traces: 0,
             _metadata: PhantomData,
         }
@@ -169,14 +168,15 @@ where
 
     /// # Panics
     /// Panic in debug if `trace.shape()[0] != self.num_samples`.
-    pub fn update<T>(&mut self, trace: ArrayView1<T>, metadata: M)
+    pub fn update<T, F>(&mut self, trace: ArrayView1<T>, metadata: M, selection_function: F)
     where
         T: Into<f32> + Copy,
+        F: Fn(M, usize) -> bool,
     {
         debug_assert_eq!(trace.shape()[0], self.num_samples);
 
         for guess in 0..self.guess_range {
-            if (self.selection_function)(metadata.clone(), guess) {
+            if selection_function(metadata.clone(), guess) {
                 for i in 0..self.num_samples {
                     self.sum_1[[guess, i]] += trace[i].into();
                 }
@@ -216,7 +216,7 @@ where
     /// change between versions.
     pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), Error> {
         let file = File::create(path)?;
-        serde_json::to_writer(file, &DpaProcessorSerdeAdapter::from(self))?;
+        serde_json::to_writer(file, self)?;
 
         Ok(())
     }
@@ -226,27 +226,23 @@ where
     /// # Warning
     /// The file format is not stable as muscat is active development. Thus, the format might
     /// change between versions.
-    pub fn load<P: AsRef<Path>>(path: P, selection_function: F) -> Result<Self, Error> {
+    pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let file = File::open(path)?;
-        let p: DpaProcessorSerdeAdapter = serde_json::from_reader(file)?;
+        let p: DpaProcessor<M> = serde_json::from_reader(file)?;
 
-        Ok(p.with(selection_function))
+        Ok(p)
     }
 
     /// Determine if two [`DpaProcessor`] are compatible for addition.
     ///
     /// If they were created with the same parameters, they are compatible.
-    ///
-    /// Note: [`DpaProcessor::selection_function`] cannot be checked for equality, but they must
-    /// have the same selection functions in order to be compatible.
     fn is_compatible_with(&self, other: &Self) -> bool {
         self.num_samples == other.num_samples && self.guess_range == other.guess_range
     }
 }
 
-impl<M, F> Add for DpaProcessor<M, F>
+impl<M> Add for DpaProcessor<M>
 where
-    F: Fn(M, usize) -> bool,
     M: Clone,
 {
     type Output = Self;
@@ -267,69 +263,15 @@ where
             sum_1: self.sum_1 + rhs.sum_1,
             count_0: self.count_0 + rhs.count_0,
             count_1: self.count_1 + rhs.count_1,
-            selection_function: self.selection_function,
             num_traces: self.num_traces + rhs.num_traces,
             _metadata: PhantomData,
         }
     }
 }
 
-/// This type implements [`Deserialize`] on the subset of fields of [`DpaProcessor`] that are
-/// serializable.
-///
-/// [`DpaProcessor<M, F>`] cannot implement [`Deserialize`] for every type `F` as it does not
-/// implement [`Default`]. One solution would be to erase the type, but that would add an
-/// indirection which could hurt the performance (not benchmarked though).
-#[derive(Serialize, Deserialize)]
-pub struct DpaProcessorSerdeAdapter {
-    num_samples: usize,
-    guess_range: usize,
-    sum_0: Array2<f32>,
-    sum_1: Array2<f32>,
-    count_0: Array1<usize>,
-    count_1: Array1<usize>,
-    num_traces: usize,
-}
-
-impl DpaProcessorSerdeAdapter {
-    pub fn with<M, F>(self, selection_function: F) -> DpaProcessor<M, F>
-    where
-        F: Fn(M, usize) -> bool,
-    {
-        DpaProcessor {
-            num_samples: self.num_samples,
-            guess_range: self.guess_range,
-            sum_0: self.sum_0,
-            sum_1: self.sum_1,
-            count_0: self.count_0,
-            count_1: self.count_1,
-            selection_function,
-            num_traces: self.num_traces,
-            _metadata: PhantomData,
-        }
-    }
-}
-
-impl<M, F> From<&DpaProcessor<M, F>> for DpaProcessorSerdeAdapter
-where
-    F: Fn(M, usize) -> bool,
-{
-    fn from(processor: &DpaProcessor<M, F>) -> Self {
-        Self {
-            num_samples: processor.num_samples,
-            guess_range: processor.guess_range,
-            sum_0: processor.sum_0.clone(),
-            sum_1: processor.sum_1.clone(),
-            count_0: processor.count_0.clone(),
-            count_1: processor.count_1.clone(),
-            num_traces: processor.num_traces,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{dpa, DpaProcessor, DpaProcessorSerdeAdapter};
+    use super::{dpa, DpaProcessor};
     use ndarray::{array, Array1, ArrayView1};
     use serde::Deserialize;
 
@@ -351,9 +293,13 @@ mod tests {
 
         let selection_function =
             |plaintext: ArrayView1<u8>, guess| (plaintext[0] as usize ^ guess) & 1 == 1;
-        let mut processor = DpaProcessor::new(traces.shape()[1], 256, selection_function);
+        let mut processor = DpaProcessor::new(traces.shape()[1], 256);
         for i in 0..traces.shape()[0] {
-            processor.update(traces.row(i).map(|&x| x as f32).view(), plaintexts.row(i));
+            processor.update(
+                traces.row(i).map(|&x| x as f32).view(),
+                plaintexts.row(i),
+                selection_function,
+            );
         }
         assert_eq!(
             processor.finalize().differential_curves(),
@@ -390,17 +336,19 @@ mod tests {
 
         let selection_function =
             |plaintext: ArrayView1<u8>, guess| (plaintext[0] as usize ^ guess) & 1 == 1;
-        let mut processor = DpaProcessor::new(traces.shape()[1], 256, selection_function);
+        let mut processor = DpaProcessor::new(traces.shape()[1], 256);
         for i in 0..traces.shape()[0] {
-            processor.update(traces.row(i).map(|&x| x as f32).view(), plaintexts.row(i));
+            processor.update(
+                traces.row(i).map(|&x| x as f32).view(),
+                plaintexts.row(i),
+                selection_function,
+            );
         }
 
-        let serialized =
-            serde_json::to_string(&DpaProcessorSerdeAdapter::from(&processor)).unwrap();
+        let serialized = serde_json::to_string(&processor).unwrap();
         let mut deserializer = serde_json::Deserializer::from_str(serialized.as_str());
-        let restored_processor = DpaProcessorSerdeAdapter::deserialize(&mut deserializer)
-            .unwrap()
-            .with(selection_function);
+        let restored_processor =
+            DpaProcessor::<ArrayView1<u8>>::deserialize(&mut deserializer).unwrap();
 
         assert_eq!(processor.num_samples, restored_processor.num_samples);
         assert_eq!(processor.guess_range, restored_processor.guess_range);

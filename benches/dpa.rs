@@ -11,10 +11,10 @@ fn selection_function(metadata: ArrayView1<u8>, guess: usize) -> bool {
 }
 
 fn dpa_sequential(traces: &Array2<f32>, plaintexts: &Array2<u8>) -> Dpa {
-    let mut dpa = DpaProcessor::new(traces.shape()[1], 256, selection_function);
+    let mut dpa = DpaProcessor::new(traces.shape()[1], 256);
 
     for i in 0..traces.shape()[0] {
-        dpa.update(traces.row(i), plaintexts.row(i));
+        dpa.update(traces.row(i), plaintexts.row(i), selection_function);
     }
 
     dpa.finalize()

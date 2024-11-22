@@ -35,20 +35,17 @@ fn cpa() -> Result<()> {
         .progress_with(progress_bar(len_traces))
         .par_bridge()
         .map(|row_number| {
-            let mut cpa = CpaProcessor::new(size, batch, guess_range, leakage_model);
+            let mut cpa = CpaProcessor::new(size, batch, guess_range);
             let range_rows = row_number..row_number + batch;
             let range_samples = start_sample..end_sample;
             let sample_traces = traces
                 .slice(s![range_rows.clone(), range_samples])
                 .map(|l| *l as f32);
             let sample_metadata = plaintext.slice(s![range_rows, ..]).map(|p| *p as usize);
-            cpa.update(sample_traces.view(), sample_metadata.view());
+            cpa.update(sample_traces.view(), sample_metadata.view(), leakage_model);
             cpa
         })
-        .reduce(
-            || CpaProcessor::new(size, batch, guess_range, leakage_model),
-            |x, y| x + y,
-        );
+        .reduce(|| CpaProcessor::new(size, batch, guess_range), |x, y| x + y);
 
     let cpa = cpa_parallel.finalize();
     println!("Guessed key = {}", cpa.best_guess());
@@ -69,7 +66,7 @@ fn success() -> Result<()> {
     let nfiles = 13; // Number of files in the directory. TBD: Automating this value
     let rank_traces = 1000;
 
-    let mut cpa = CpaProcessor::new(size, batch, guess_range, leakage_model);
+    let mut cpa = CpaProcessor::new(size, batch, guess_range);
 
     let mut rank = Array1::zeros(guess_range);
     let mut processed_traces = 0;
@@ -87,7 +84,7 @@ fn success() -> Result<()> {
                 .map(|l| *l as f32);
             let sample_metadata = plaintext.slice(s![range_rows, range_metadata]);
 
-            cpa.update(sample_traces.view(), sample_metadata);
+            cpa.update(sample_traces.view(), sample_metadata, leakage_model);
             processed_traces += sample_traces.len();
             if processed_traces % rank_traces == 0 {
                 // rank can be saved to get its evolution

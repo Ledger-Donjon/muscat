@@ -105,6 +105,7 @@ impl SnrProcessor {
     /// - Panics in debug if the length of the trace is different from the size of [`SnrProcessor`].
     pub fn process<T: Into<i64> + Copy>(&mut self, trace: ArrayView1<T>, class: usize) {
         debug_assert!(trace.len() == self.size());
+        debug_assert!(class < self.num_classes());
 
         self.mean_var.process(trace);
 
