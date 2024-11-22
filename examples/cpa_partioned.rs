@@ -34,21 +34,22 @@ fn cpa() -> Result<()> {
         })
         .par_bridge()
         .map(|batch| {
-            let mut c = CpaProcessor::new(size, guess_range, target_byte, leakage_model);
+            let mut c = CpaProcessor::new(size, guess_range, target_byte);
             for i in 0..batch.0.shape()[0] {
                 c.update(
                     batch.0.row(i).map(|x| *x as usize).view(),
                     batch.1.row(i).map(|y| *y as usize).view(),
+                    leakage_model,
                 );
             }
             c
         })
         .reduce(
-            || CpaProcessor::new(size, guess_range, target_byte, leakage_model),
+            || CpaProcessor::new(size, guess_range, target_byte),
             |a, b| a + b,
         );
 
-    let cpa_result = cpa.finalize();
+    let cpa_result = cpa.finalize(leakage_model);
     println!("Guessed key = {}", cpa_result.best_guess());
 
     // save corr key curves in npy
