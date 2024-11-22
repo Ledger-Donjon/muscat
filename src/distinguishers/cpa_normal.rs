@@ -47,7 +47,7 @@ pub fn cpa<T, P, F>(
     traces: ArrayView2<T>,
     plaintexts: ArrayView2<P>,
     guess_range: usize,
-    leakage_func: F,
+    leakage_model: F,
     batch_size: usize,
 ) -> Cpa
 where
@@ -64,9 +64,9 @@ where
     )
     .par_bridge()
     .fold(
-        || CpaProcessor::new(traces.shape()[1], batch_size, guess_range, leakage_func),
+        || CpaProcessor::new(traces.shape()[1], batch_size, guess_range),
         |mut cpa, (trace_batch, plaintext_batch)| {
-            cpa.update(trace_batch, plaintext_batch);
+            cpa.update(trace_batch, plaintext_batch, leakage_model);
 
             cpa
         },
@@ -79,10 +79,8 @@ where
 /// A processor that computes the [`Cpa`] of the given traces.
 ///
 /// [^1]: <https://www.iacr.org/archive/ches2004/31560016/31560016.pdf>
-pub struct CpaProcessor<F>
-where
-    F: Fn(ArrayView1<usize>, usize) -> usize,
-{
+#[derive(Serialize, Deserialize)]
+pub struct CpaProcessor {
     /// Number of samples per trace
     num_samples: usize,
     /// Guess range upper excluded bound
@@ -99,17 +97,12 @@ where
     cov: Array2<f32>,
     /// Batch size
     batch_size: usize,
-    /// Leakage model
-    leakage_func: F,
     /// Number of traces processed
     num_traces: usize,
 }
 
-impl<F> CpaProcessor<F>
-where
-    F: Fn(ArrayView1<usize>, usize) -> usize,
-{
-    pub fn new(num_samples: usize, batch_size: usize, guess_range: usize, leakage_func: F) -> Self {
+impl CpaProcessor {
+    pub fn new(num_samples: usize, batch_size: usize, guess_range: usize) -> Self {
         Self {
             num_samples,
             guess_range,
@@ -120,7 +113,6 @@ where
             values: Array2::zeros((batch_size, guess_range)),
             cov: Array2::zeros((guess_range, num_samples)),
             batch_size,
-            leakage_func,
             num_traces: 0,
         }
     }
@@ -128,10 +120,15 @@ where
     /// # Panics
     /// - Panic in debug if `trace_batch.shape()[0] != plaintext_batch.shape()[0]`.
     /// - Panic in debug if `trace_batch.shape()[1] != self.num_samples`.
-    pub fn update<T, P>(&mut self, trace_batch: ArrayView2<T>, plaintext_batch: ArrayView2<P>)
-    where
+    pub fn update<T, P, F>(
+        &mut self,
+        trace_batch: ArrayView2<T>,
+        plaintext_batch: ArrayView2<P>,
+        leakage_model: F,
+    ) where
         T: Into<f32> + Copy,
         P: Into<usize> + Copy,
+        F: Fn(ArrayView1<usize>, usize) -> usize,
     {
         debug_assert_eq!(trace_batch.shape()[0], plaintext_batch.shape()[0]);
         debug_assert_eq!(trace_batch.shape()[1], self.num_samples);
@@ -141,23 +138,31 @@ where
         let trace_batch = trace_batch.mapv(|t| t.into());
         let plaintext_batch = plaintext_batch.mapv(|m| m.into());
 
-        self.update_values(trace_batch.view(), plaintext_batch.view(), self.guess_range);
+        self.update_values(
+            trace_batch.view(),
+            plaintext_batch.view(),
+            self.guess_range,
+            leakage_model,
+        );
         self.update_key_leakages(trace_batch.view(), self.guess_range);
 
         self.num_traces += self.batch_size;
     }
 
-    fn update_values(
+    fn update_values<F>(
         /* This function generates the values and cov arrays */
         &mut self,
         trace: ArrayView2<f32>,
         metadata: ArrayView2<usize>,
         guess_range: usize,
-    ) {
+        leakage_model: F,
+    ) where
+        F: Fn(ArrayView1<usize>, usize) -> usize,
+    {
         for row in 0..self.batch_size {
             for guess in 0..guess_range {
                 let pass_to_leakage = metadata.row(row);
-                self.values[[row, guess]] = (self.leakage_func)(pass_to_leakage, guess) as f32;
+                self.values[[row, guess]] = leakage_model(pass_to_leakage, guess) as f32;
             }
         }
 
@@ -210,7 +215,7 @@ where
     /// change between versions.
     pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), Error> {
         let file = File::create(path)?;
-        serde_json::to_writer(file, &CpaProcessorSerdeAdapter::from(self))?;
+        serde_json::to_writer(file, self)?;
 
         Ok(())
     }
@@ -220,19 +225,16 @@ where
     /// # Warning
     /// The file format is not stable as muscat is active development. Thus, the format might
     /// change between versions.
-    pub fn load<P: AsRef<Path>>(path: P, leakage_func: F) -> Result<Self, Error> {
+    pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let file = File::open(path)?;
-        let p: CpaProcessorSerdeAdapter = serde_json::from_reader(file)?;
+        let p: CpaProcessor = serde_json::from_reader(file)?;
 
-        Ok(p.with(leakage_func))
+        Ok(p)
     }
 
     /// Determine if two [`CpaProcessor`] are compatible for addition.
     ///
     /// If they were created with the same parameters, they are compatible.
-    ///
-    /// Note: [`CpaProcessor::leakage_func`] cannot be checked for equality, but they must have the
-    /// same leakage functions in order to be compatible.
     fn is_compatible_with(&self, other: &Self) -> bool {
         self.num_samples == other.num_samples
             && self.batch_size == other.batch_size
@@ -240,10 +242,7 @@ where
     }
 }
 
-impl<F> Add for CpaProcessor<F>
-where
-    F: Fn(ArrayView1<usize>, usize) -> usize,
-{
+impl Add for CpaProcessor {
     type Output = Self;
 
     /// Merge computations of two [`CpaProcessor`]. Processors need to be compatible to be merged
@@ -265,69 +264,7 @@ where
             values: self.values + rhs.values,
             cov: self.cov + rhs.cov,
             batch_size: self.batch_size,
-            leakage_func: self.leakage_func,
             num_traces: self.num_traces + rhs.num_traces,
-        }
-    }
-}
-
-/// This type implements [`Deserialize`] on the subset of fields of [`CpaProcessor`] that are
-/// serializable.
-///
-/// [`CpaProcessor<F>`] cannot implement [`Deserialize`] for every type `F` as it does not
-/// implement [`Default`]. One solution would be to erase the type, but that would add an
-/// indirection which could hurt the performance (not benchmarked though).
-#[derive(Serialize, Deserialize)]
-pub struct CpaProcessorSerdeAdapter {
-    num_samples: usize,
-    guess_range: usize,
-    sum_traces: Array1<f32>,
-    sum_traces2: Array1<f32>,
-    guess_sum_traces: Array1<f32>,
-    guess_sum_traces2: Array1<f32>,
-    values: Array2<f32>,
-    cov: Array2<f32>,
-    batch_size: usize,
-    num_traces: usize,
-}
-
-impl CpaProcessorSerdeAdapter {
-    pub fn with<F>(self, leakage_func: F) -> CpaProcessor<F>
-    where
-        F: Fn(ArrayView1<usize>, usize) -> usize,
-    {
-        CpaProcessor {
-            num_samples: self.num_samples,
-            guess_range: self.guess_range,
-            sum_traces: self.sum_traces,
-            sum_traces2: self.sum_traces2,
-            guess_sum_traces: self.guess_sum_traces,
-            guess_sum_traces2: self.guess_sum_traces2,
-            values: self.values,
-            cov: self.cov,
-            batch_size: self.batch_size,
-            leakage_func,
-            num_traces: self.num_traces,
-        }
-    }
-}
-
-impl<F> From<&CpaProcessor<F>> for CpaProcessorSerdeAdapter
-where
-    F: Fn(ArrayView1<usize>, usize) -> usize,
-{
-    fn from(processor: &CpaProcessor<F>) -> Self {
-        Self {
-            num_samples: processor.num_samples,
-            guess_range: processor.guess_range,
-            sum_traces: processor.sum_traces.clone(),
-            sum_traces2: processor.sum_traces2.clone(),
-            guess_sum_traces: processor.guess_sum_traces.clone(),
-            guess_sum_traces2: processor.guess_sum_traces2.clone(),
-            values: processor.values.clone(),
-            cov: processor.cov.clone(),
-            batch_size: processor.batch_size,
-            num_traces: processor.num_traces,
         }
     }
 }
@@ -336,7 +273,7 @@ where
 mod tests {
     use std::iter::zip;
 
-    use super::{cpa, CpaProcessor, CpaProcessorSerdeAdapter};
+    use super::{cpa, CpaProcessor};
     use ndarray::{array, ArrayView1, Axis};
     use serde::Deserialize;
 
@@ -357,12 +294,16 @@ mod tests {
         let plaintexts = array![[1usize], [3], [1], [2], [3], [2], [2], [1], [3], [1]];
 
         let leakage_model = |plaintext: ArrayView1<usize>, guess| plaintext[0] ^ guess;
-        let mut processor = CpaProcessor::new(traces.shape()[1], 1, 256, leakage_model);
+        let mut processor = CpaProcessor::new(traces.shape()[1], 1, 256);
         for (trace, plaintext) in zip(
             traces.axis_chunks_iter(Axis(0), 1),
             plaintexts.axis_chunks_iter(Axis(0), 1),
         ) {
-            processor.update(trace.map(|&x| x as f32).view(), plaintext.view());
+            processor.update(
+                trace.map(|&x| x as f32).view(),
+                plaintext.view(),
+                leakage_model,
+            );
         }
         assert_eq!(
             processor.finalize().corr(),
@@ -394,20 +335,22 @@ mod tests {
         let plaintexts = array![[1usize], [3], [1], [2], [3], [2], [2], [1], [3], [1]];
 
         let leakage_model = |plaintext: ArrayView1<usize>, guess| plaintext[0] ^ guess;
-        let mut processor = CpaProcessor::new(traces.shape()[1], 1, 256, leakage_model);
+        let mut processor = CpaProcessor::new(traces.shape()[1], 1, 256);
         for (trace, plaintext) in zip(
             traces.axis_chunks_iter(Axis(0), 1),
             plaintexts.axis_chunks_iter(Axis(0), 1),
         ) {
-            processor.update(trace.map(|&x| x as f32).view(), plaintext.view());
+            processor.update(
+                trace.map(|&x| x as f32).view(),
+                plaintext.view(),
+                leakage_model,
+            );
         }
 
-        let serialized =
-            serde_json::to_string(&CpaProcessorSerdeAdapter::from(&processor)).unwrap();
-        let mut deserializer = serde_json::Deserializer::from_str(serialized.as_str());
-        let restored_processor = CpaProcessorSerdeAdapter::deserialize(&mut deserializer)
-            .unwrap()
-            .with(leakage_model);
+        let serialized = serde_json::to_string(&processor).unwrap();
+        let mut deserializer: serde_json::Deserializer<serde_json::de::StrRead<'_>> =
+            serde_json::Deserializer::from_str(serialized.as_str());
+        let restored_processor = CpaProcessor::deserialize(&mut deserializer).unwrap();
 
         assert_eq!(processor.num_samples, restored_processor.num_samples);
         assert_eq!(processor.guess_range, restored_processor.guess_range);

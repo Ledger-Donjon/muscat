@@ -13,16 +13,17 @@ pub fn leakage_model(value: usize, guess: usize) -> usize {
 }
 
 fn cpa_sequential(traces: &Array2<f64>, plaintexts: &Array2<u8>) -> Cpa {
-    let mut cpa = CpaProcessor::new(traces.shape()[1], 256, 0, leakage_model);
+    let mut cpa = CpaProcessor::new(traces.shape()[1], 256, 0);
 
     for i in 0..traces.shape()[0] {
         cpa.update(
             traces.row(i).map(|&x| x as usize).view(),
             plaintexts.row(i).map(|&y| y as usize).view(),
+            leakage_model,
         );
     }
 
-    cpa.finalize()
+    cpa.finalize(leakage_model)
 }
 
 pub fn leakage_model_normal(value: ArrayView1<usize>, guess: usize) -> usize {
@@ -32,14 +33,17 @@ pub fn leakage_model_normal(value: ArrayView1<usize>, guess: usize) -> usize {
 fn cpa_normal_sequential(traces: &Array2<f64>, plaintexts: &Array2<u8>) -> Cpa {
     let batch_size = 500;
 
-    let mut cpa =
-        cpa_normal::CpaProcessor::new(traces.shape()[1], batch_size, 256, leakage_model_normal);
+    let mut cpa = cpa_normal::CpaProcessor::new(traces.shape()[1], batch_size, 256);
 
     for (trace_batch, plaintext_batch) in zip(
         traces.axis_chunks_iter(Axis(0), batch_size),
         plaintexts.axis_chunks_iter(Axis(0), batch_size),
     ) {
-        cpa.update(trace_batch.map(|&x| x as f32).view(), plaintext_batch);
+        cpa.update(
+            trace_batch.map(|&x| x as f32).view(),
+            plaintext_batch,
+            leakage_model_normal,
+        );
     }
 
     cpa.finalize()

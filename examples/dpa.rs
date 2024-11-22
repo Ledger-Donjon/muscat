@@ -25,14 +25,18 @@ fn dpa() -> Result<()> {
     let traces = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
     let plaintext = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
     let len_traces = 20000; //traces.shape()[0];
-    let mut dpa_proc = DpaProcessor::new(size, guess_range, selection_function);
+    let mut dpa_proc = DpaProcessor::new(size, guess_range);
     for i in (0..len_traces).progress() {
         let tmp_trace = traces
             .row(i)
             .slice(s![start_sample..end_sample])
             .mapv(|t| t as f32);
         let tmp_metadata = plaintext.row(i);
-        dpa_proc.update(tmp_trace.view(), tmp_metadata.to_owned());
+        dpa_proc.update(
+            tmp_trace.view(),
+            tmp_metadata.to_owned(),
+            selection_function,
+        );
     }
     let dpa = dpa_proc.finalize();
     println!("Guessed key = {:02x}", dpa.best_guess());
@@ -53,7 +57,7 @@ fn dpa_success() -> Result<()> {
     let traces = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
     let plaintext = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
     let len_traces = traces.shape()[0];
-    let mut dpa_proc = DpaProcessor::new(size, guess_range, selection_function);
+    let mut dpa_proc = DpaProcessor::new(size, guess_range);
     let rank_traces: usize = 100;
 
     let mut rank = Array1::zeros(guess_range);
@@ -63,7 +67,7 @@ fn dpa_success() -> Result<()> {
             .slice(s![start_sample..end_sample])
             .mapv(|t| t as f32);
         let tmp_metadata = plaintext.row(i).to_owned();
-        dpa_proc.update(tmp_trace.view(), tmp_metadata);
+        dpa_proc.update(tmp_trace.view(), tmp_metadata, selection_function);
 
         if i % rank_traces == 0 {
             // rank can be saved to get its evolution
@@ -102,18 +106,15 @@ fn dpa_parallel() -> Result<()> {
                 .slice(s![range_rows..range_rows + batch, ..])
                 .to_owned();
 
-            let mut dpa_inner = DpaProcessor::new(size, guess_range, selection_function);
+            let mut dpa_inner = DpaProcessor::new(size, guess_range);
             for i in 0..batch {
                 let trace = tmp_traces.row(i);
                 let metadata = tmp_metadata.row(i).to_owned();
-                dpa_inner.update(trace, metadata);
+                dpa_inner.update(trace, metadata, selection_function);
             }
             dpa_inner
         })
-        .reduce(
-            || DpaProcessor::new(size, guess_range, selection_function),
-            |x, y| x + y,
-        )
+        .reduce(|| DpaProcessor::new(size, guess_range), |x, y| x + y)
         .finalize();
 
     println!("{:2x}", dpa.best_guess());
