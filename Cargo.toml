@@ -23,6 +23,8 @@ indicatif = { version = "0.17.8", optional = true }
 ndarray-npy ="0.8.1"
 itertools = "0.12.1"
 thiserror = { version = "1.0.58", optional = true }
+dtw = { git = "https://github.com/Ledger-Donjon/dtw.git", rev = "0f8d7ec3bbdf2ca4ec8ea35feddb8d1db73e7d54" }
+num-traits = "0.2.19"
 
 [dev-dependencies]
 criterion = "0.5.1"
