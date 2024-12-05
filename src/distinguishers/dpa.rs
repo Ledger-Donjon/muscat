@@ -52,7 +52,7 @@ use crate::util::{argmax_by, argsort_by, max_per_row};
 ///
 /// # Panics
 /// Panic if `batch_size` is not strictly positive.
-pub fn dpa<M, T, F>(
+pub fn dpa<T, M, F>(
     traces: ArrayView2<T>,
     metadata: ArrayView1<M>,
     guess_range: usize,

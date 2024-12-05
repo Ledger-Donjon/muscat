@@ -15,7 +15,7 @@ use std::{iter::zip, ops::Add};
 /// use ndarray::array;
 ///
 /// let traces = array![
-///     [77, 137, 51, 91],
+///     [77u8, 137, 51, 91],
 ///     [72, 61, 91, 83],
 ///     [39, 49, 52, 23],
 ///     [26, 114, 63, 45],
@@ -44,9 +44,9 @@ use std::{iter::zip, ops::Add};
 /// # Panics
 /// - Panic if `traces.shape()[0] != plaintexts.shape()[0]`
 /// - Panic if `batch_size` is 0.
-pub fn cpa<T, F>(
+pub fn cpa<T, P, F>(
     traces: ArrayView2<T>,
-    plaintexts: ArrayView2<T>,
+    plaintexts: ArrayView2<P>,
     guess_range: usize,
     target_byte: usize,
     leakage_func: F,
@@ -54,6 +54,7 @@ pub fn cpa<T, F>(
 ) -> Cpa
 where
     T: Into<usize> + Copy + Sync,
+    P: Into<usize> + Copy + Sync,
     F: Fn(usize, usize) -> usize + Send + Sync + Copy,
 {
     assert_eq!(traces.shape()[0], plaintexts.shape()[0]);
@@ -171,9 +172,10 @@ where
 
     /// # Panics
     /// Panic in debug if `trace.shape()[0] != self.num_samples`.
-    pub fn update<T>(&mut self, trace: ArrayView1<T>, plaintext: ArrayView1<T>)
+    pub fn update<T, P>(&mut self, trace: ArrayView1<T>, plaintext: ArrayView1<P>)
     where
         T: Into<usize> + Copy,
+        P: Into<usize> + Copy,
     {
         debug_assert_eq!(trace.shape()[0], self.num_samples);
 
