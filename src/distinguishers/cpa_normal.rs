@@ -42,16 +42,16 @@ use crate::distinguishers::cpa::Cpa;
 /// # Panics
 /// - Panic if `traces.shape()[0] != plaintexts.shape()[0]`
 /// - Panic if `batch_size` is 0.
-pub fn cpa<T, U, F>(
+pub fn cpa<T, P, F>(
     traces: ArrayView2<T>,
-    plaintexts: ArrayView2<U>,
+    plaintexts: ArrayView2<P>,
     guess_range: usize,
     leakage_func: F,
     batch_size: usize,
 ) -> Cpa
 where
     T: Into<f32> + Copy + Sync,
-    U: Into<usize> + Copy + Sync,
+    P: Into<usize> + Copy + Sync,
     F: Fn(ArrayView1<usize>, usize) -> usize + Send + Sync + Copy,
 {
     assert_eq!(traces.shape()[0], plaintexts.shape()[0]);
@@ -127,10 +127,10 @@ where
     /// # Panics
     /// - Panic in debug if `trace_batch.shape()[0] != plaintext_batch.shape()[0]`.
     /// - Panic in debug if `trace_batch.shape()[1] != self.num_samples`.
-    pub fn update<T, U>(&mut self, trace_batch: ArrayView2<T>, plaintext_batch: ArrayView2<U>)
+    pub fn update<T, P>(&mut self, trace_batch: ArrayView2<T>, plaintext_batch: ArrayView2<P>)
     where
         T: Into<f32> + Copy,
-        U: Into<usize> + Copy,
+        P: Into<usize> + Copy,
     {
         debug_assert_eq!(trace_batch.shape()[0], plaintext_batch.shape()[0]);
         debug_assert_eq!(trace_batch.shape()[1], self.num_samples);
