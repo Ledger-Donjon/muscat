@@ -42,7 +42,7 @@ use std::{fs::File, iter::zip, ops::Add, path::Path};
 ///     [2, 1],
 ///     [2, 1],
 /// ];
-/// let cpa = cpa(traces.view(), plaintexts.view(), 256, 0, |key, guess| sbox((key ^ guess) as u8) as usize, 2);
+/// let cpa = cpa(traces.view(), plaintexts.view(), 256, 0, |plaintext, guess| sbox((plaintext ^ guess) as u8) as usize, 2);
 /// ```
 ///
 /// # Panics
@@ -323,7 +323,7 @@ mod tests {
         ];
         let plaintexts = array![[1usize], [3], [1], [2], [3], [2], [2], [1], [3], [1]];
 
-        let leakage_model = |value, guess| value ^ guess;
+        let leakage_model = |plaintext, guess| plaintext ^ guess;
         let mut processor = CpaProcessor::new(traces.shape()[1], 256, 0);
         for i in 0..traces.shape()[0] {
             processor.update(traces.row(i), plaintexts.row(i), leakage_model);
