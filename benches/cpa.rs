@@ -8,8 +8,8 @@ use ndarray_rand::rand_distr::Uniform;
 use ndarray_rand::RandomExt;
 use std::iter::zip;
 
-pub fn leakage_model(value: usize, guess: usize) -> usize {
-    hw(sbox((value ^ guess) as u8) as usize)
+pub fn leakage_model(plaintext: usize, guess: usize) -> usize {
+    hw(sbox((plaintext ^ guess) as u8) as usize)
 }
 
 fn cpa_sequential(traces: &Array2<f64>, plaintexts: &Array2<u8>) -> Cpa {
@@ -26,8 +26,8 @@ fn cpa_sequential(traces: &Array2<f64>, plaintexts: &Array2<u8>) -> Cpa {
     cpa.finalize(leakage_model)
 }
 
-pub fn leakage_model_normal(value: ArrayView1<usize>, guess: usize) -> usize {
-    hw(sbox((value[1] ^ guess) as u8) as usize)
+pub fn leakage_model_normal(plaintext: ArrayView1<usize>, guess: usize) -> usize {
+    hw(sbox((plaintext[1] ^ guess) as u8) as usize)
 }
 
 fn cpa_normal_sequential(traces: &Array2<f64>, plaintexts: &Array2<u8>) -> Cpa {

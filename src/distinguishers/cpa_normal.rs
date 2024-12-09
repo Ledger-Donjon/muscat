@@ -37,7 +37,7 @@ use crate::{distinguishers::cpa::Cpa, Error};
 ///     [2, 1],
 ///     [2, 1],
 /// ];
-/// let cpa = cpa(traces.map(|&x| x as f32).view(), plaintexts.view(), 256, |key, guess| sbox((key[0] ^ guess) as u8) as usize, 2);
+/// let cpa = cpa(traces.map(|&x| x as f32).view(), plaintexts.view(), 256, |plaintext, guess| sbox((plaintext[0] ^ guess) as u8) as usize, 2);
 /// ```
 ///
 /// # Panics

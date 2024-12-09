@@ -49,7 +49,7 @@ use crate::{
 ///         .collect::<Array1<Array1<u8>>>()
 ///         .view(),
 ///     256,
-///     |key: Array1<u8>, guess| sbox(key[0] ^ guess as u8) & 1 == 1,
+///     |plaintext: Array1<u8>, guess| sbox(plaintext[0] ^ guess as u8) & 1 == 1,
 ///     2
 /// );
 /// ```
