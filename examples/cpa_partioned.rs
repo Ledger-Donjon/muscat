@@ -36,20 +36,17 @@ fn cpa() -> Result<()> {
         })
         .par_bridge()
         .map(|batch| {
-            let mut c = CpaProcessor::new(size, guess_range, target_byte);
+            let mut c = CpaProcessor::new(size, guess_range);
             for i in 0..batch.0.shape()[0] {
                 c.update(
                     batch.0.row(i).map(|x| *x as usize).view(),
-                    batch.1.row(i).map(|y| *y as usize).view(),
+                    batch.1.row(i)[target_byte] as usize,
                     leakage_model,
                 );
             }
             c
         })
-        .reduce(
-            || CpaProcessor::new(size, guess_range, target_byte),
-            |a, b| a + b,
-        );
+        .reduce(|| CpaProcessor::new(size, guess_range), |a, b| a + b);
 
     let cpa_result = cpa.finalize(leakage_model);
     println!("Guessed key = {}", cpa_result.best_guess());

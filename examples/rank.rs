@@ -23,7 +23,7 @@ fn rank() -> Result<()> {
     let folder = String::from("../../data");
     let nfiles = 5;
     let batch_size = 3000;
-    let mut rank = CpaProcessor::new(size, guess_range, target_byte);
+    let mut rank = CpaProcessor::new(size, guess_range);
     for file in (0..nfiles).progress_with(progress_bar(nfiles)) {
         let dir_l = format!("{folder}/l{file}.npy");
         let dir_p = format!("{folder}/p{file}.npy");
@@ -38,18 +38,18 @@ fn rank() -> Result<()> {
             let x = (0..batch_size)
                 .par_bridge()
                 .fold(
-                    || CpaProcessor::new(size, guess_range, target_byte),
+                    || CpaProcessor::new(size, guess_range),
                     |mut r, n| {
                         r.update(
                             l_sample.row(n).map(|l| *l as usize).view(),
-                            p_sample.row(n).map(|p| *p as usize).view(),
+                            p_sample.row(n)[target_byte] as usize,
                             leakage_model,
                         );
                         r
                     },
                 )
                 .reduce(
-                    || CpaProcessor::new(size, guess_range, target_byte),
+                    || CpaProcessor::new(size, guess_range),
                     |lhs, rhs| lhs + rhs,
                 );
             rank = rank + x;
