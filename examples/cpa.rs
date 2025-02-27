@@ -2,9 +2,9 @@ use anyhow::Result;
 use indicatif::ProgressIterator;
 use muscat::distinguishers::cpa_normal::CpaProcessor;
 use muscat::leakage_model::{aes::sbox, hw};
-use muscat::util::{progress_bar, read_array2_from_npy_file, save_array2};
+use muscat::util::progress_bar;
 use ndarray::*;
-use ndarray_npy::write_npy;
+use ndarray_npy::{read_npy, write_npy};
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use std::time;
 
@@ -27,8 +27,8 @@ fn cpa() -> Result<()> {
     let folder = String::from("../../data/cw");
     let dir_l = format!("{folder}/leakages.npy");
     let dir_p = format!("{folder}/plaintexts.npy");
-    let traces = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
-    let plaintext = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
+    let traces: Array2<FormatTraces> = read_npy(&dir_l)?;
+    let plaintext: Array2<FormatMetadata> = read_npy(&dir_p)?;
     let len_traces = traces.shape()[0];
 
     let cpa_parallel = ((0..len_traces).step_by(batch))
@@ -50,7 +50,7 @@ fn cpa() -> Result<()> {
     let cpa = cpa_parallel.finalize();
     println!("Guessed key = {}", cpa.best_guess());
 
-    save_array2("results/corr.npy", cpa.corr())?;
+    write_npy("results/corr.npy", &cpa.corr())?;
 
     Ok(())
 }
@@ -73,8 +73,8 @@ fn success() -> Result<()> {
     for i in (0..nfiles).progress() {
         let dir_l = format!("{folder}/l/{i}.npy");
         let dir_p = format!("{folder}/p/{i}.npy");
-        let traces = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
-        let plaintext = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
+        let traces: Array2<FormatTraces> = read_npy(&dir_l)?;
+        let plaintext: Array2<FormatMetadata> = read_npy(&dir_p)?;
         for row in (0..traces.shape()[0]).step_by(batch) {
             let range_samples = start_sample..end_sample;
             let range_rows = row..row + batch;

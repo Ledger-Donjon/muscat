@@ -2,8 +2,8 @@ use anyhow::Result;
 use indicatif::ProgressIterator;
 use muscat::distinguishers::dpa::DpaProcessor;
 use muscat::leakage_model::aes::sbox;
-use muscat::util::read_array2_from_npy_file;
-use ndarray::{s, Array1};
+use ndarray::{s, Array1, Array2};
+use ndarray_npy::read_npy;
 use rayon::iter::{ParallelBridge, ParallelIterator};
 
 // traces format
@@ -22,8 +22,8 @@ fn dpa() -> Result<()> {
     let folder = String::from("../../data/cw");
     let dir_l = format!("{folder}/leakages.npy");
     let dir_p = format!("{folder}/plaintexts.npy");
-    let traces = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
-    let plaintext = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
+    let traces: Array2<FormatTraces> = read_npy(&dir_l)?;
+    let plaintext: Array2<FormatMetadata> = read_npy(&dir_p)?;
     let len_traces = 20000; //traces.shape()[0];
     let mut dpa_proc = DpaProcessor::new(size, guess_range);
     for i in (0..len_traces).progress() {
@@ -54,8 +54,8 @@ fn dpa_success() -> Result<()> {
     let folder = String::from("../../data/cw");
     let dir_l = format!("{folder}/leakages.npy");
     let dir_p = format!("{folder}/plaintexts.npy");
-    let traces = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
-    let plaintext = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
+    let traces: Array2<FormatTraces> = read_npy(&dir_l)?;
+    let plaintext: Array2<FormatMetadata> = read_npy(&dir_p)?;
     let len_traces = traces.shape()[0];
     let mut dpa_proc = DpaProcessor::new(size, guess_range);
     let rank_traces: usize = 100;
@@ -91,8 +91,8 @@ fn dpa_parallel() -> Result<()> {
     let folder = String::from("../../data/cw");
     let dir_l = format!("{folder}/leakages.npy");
     let dir_p = format!("{folder}/plaintexts.npy");
-    let traces = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
-    let plaintext = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
+    let traces: Array2<FormatTraces> = read_npy(&dir_l)?;
+    let plaintext: Array2<FormatMetadata> = read_npy(&dir_p)?;
     let len_traces = 20000; // traces.shape()[0];
     let batch = 2500;
     let dpa = (0..len_traces)

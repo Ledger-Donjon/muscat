@@ -2,7 +2,9 @@ use anyhow::Result;
 use indicatif::ProgressIterator;
 use muscat::distinguishers::cpa::CpaProcessor;
 use muscat::leakage_model::{aes::sbox, hw};
-use muscat::util::{progress_bar, read_array2_from_npy_file, save_array};
+use muscat::util::progress_bar;
+use ndarray::Array2;
+use ndarray_npy::{read_npy, write_npy};
 use rayon::prelude::{ParallelBridge, ParallelIterator};
 
 // traces format
@@ -28,8 +30,8 @@ fn cpa() -> Result<()> {
         .map(|n| {
             let dir_l = format!("{folder}/l{n}.npy");
             let dir_p = format!("{folder}/p{n}.npy");
-            let traces = read_array2_from_npy_file::<FormatTraces>(&dir_l).unwrap();
-            let plaintext = read_array2_from_npy_file::<FormatMetadata>(&dir_p).unwrap();
+            let traces: Array2<FormatTraces> = read_npy(&dir_l).unwrap();
+            let plaintext: Array2<FormatMetadata> = read_npy(&dir_p).unwrap();
             (traces, plaintext)
         })
         .par_bridge()
@@ -53,7 +55,7 @@ fn cpa() -> Result<()> {
     println!("Guessed key = {}", cpa_result.best_guess());
 
     // save corr key curves in npy
-    save_array("../results/corr.npy", &cpa_result.corr())?;
+    write_npy("../results/corr.npy", &cpa_result.corr())?;
 
     Ok(())
 }

@@ -31,12 +31,7 @@ serde = { version = "1.0.214", features = ["derive"] }
 criterion = "0.5.1"
 ndarray-rand = "0.15.0"
 anyhow = "1.0.92"
-muscat = { path = ".", features = ["progress_bar"] }
-
-[[example]]
-name = "snr"
-path = "examples/snr.rs"
-required-features = ["quicklog"]
+muscat = { path = ".", features = ["progress_bar", "quicklog"] }
 
 [[bench]]
 name = "cpa"

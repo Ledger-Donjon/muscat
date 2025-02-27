@@ -2,7 +2,8 @@ use anyhow::Result;
 use indicatif::ProgressIterator;
 use muscat::leakage_detection::SnrProcessor;
 use muscat::quicklog::{BatchIter, Log};
-use muscat::util::{progress_bar, save_array};
+use muscat::util::progress_bar;
+use ndarray_npy::write_npy;
 use rayon::prelude::{ParallelBridge, ParallelIterator};
 
 fn main() -> Result<()> {
@@ -38,7 +39,7 @@ fn main() -> Result<()> {
         .reduce(|| SnrProcessor::new(leakage_size, 256), |a, b| a + b);
 
     // Save the resulting SNR trace to a numpy file
-    save_array("result.npy", &result.snr())?;
+    write_npy("result.npy", &result.snr())?;
 
     Ok(())
 }
