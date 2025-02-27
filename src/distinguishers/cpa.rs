@@ -71,10 +71,14 @@ where
     )
     .par_bridge()
     .fold(
-        || CpaProcessor::new(traces.shape()[1], guess_range, target_byte),
+        || CpaProcessor::new(traces.shape()[1], guess_range),
         |mut cpa, (trace_batch, plaintext_batch)| {
             for i in 0..trace_batch.shape()[0] {
-                cpa.update(trace_batch.row(i), plaintext_batch.row(i), leakage_model);
+                cpa.update(
+                    trace_batch.row(i),
+                    plaintext_batch.row(i)[target_byte],
+                    leakage_model,
+                );
             }
 
             cpa
@@ -127,8 +131,6 @@ impl Cpa {
 pub struct CpaProcessor {
     /// Number of samples per trace
     num_samples: usize,
-    /// Target byte index in a block
-    target_byte: usize,
     /// Guess range upper excluded bound
     guess_range: usize,
     /// Sum of traces
@@ -147,10 +149,9 @@ pub struct CpaProcessor {
 }
 
 impl CpaProcessor {
-    pub fn new(num_samples: usize, guess_range: usize, target_byte: usize) -> Self {
+    pub fn new(num_samples: usize, guess_range: usize) -> Self {
         Self {
             num_samples,
-            target_byte,
             guess_range,
             sum_traces: Array1::zeros(num_samples),
             sum_square_traces: Array1::zeros(num_samples),
@@ -163,28 +164,24 @@ impl CpaProcessor {
 
     /// # Panics
     /// Panic in debug if `trace.shape()[0] != self.num_samples`.
-    pub fn update<T, P, F>(
-        &mut self,
-        trace: ArrayView1<T>,
-        plaintext: ArrayView1<P>,
-        leakage_model: F,
-    ) where
+    pub fn update<T, P, F>(&mut self, trace: ArrayView1<T>, plaintext: P, leakage_model: F)
+    where
         T: Into<usize> + Copy,
         P: Into<usize> + Copy,
         F: Fn(usize, usize) -> usize,
     {
         debug_assert_eq!(trace.shape()[0], self.num_samples);
 
-        let partition = plaintext[self.target_byte].into();
+        let plaintext = plaintext.into();
         for i in 0..self.num_samples {
             self.sum_traces[i] += trace[i].into();
             self.sum_square_traces[i] += trace[i].into() * trace[i].into();
 
-            self.plaintext_sum_traces[[partition, i]] += trace[i].into();
+            self.plaintext_sum_traces[[plaintext, i]] += trace[i].into();
         }
 
         for guess in 0..self.guess_range {
-            let value = leakage_model(plaintext[self.target_byte].into(), guess);
+            let value = leakage_model(plaintext, guess);
             self.guess_sum_traces[guess] += value;
             self.guess_sum_squares_traces[guess] += value * value;
         }
@@ -269,9 +266,7 @@ impl CpaProcessor {
     ///
     /// If they were created with the same parameters, they are compatible.
     fn is_compatible_with(&self, other: &Self) -> bool {
-        self.num_samples == other.num_samples
-            && self.target_byte == other.target_byte
-            && self.guess_range == other.guess_range
+        self.num_samples == other.num_samples && self.guess_range == other.guess_range
     }
 }
 
@@ -289,7 +284,6 @@ impl Add for CpaProcessor {
 
         Self {
             num_samples: self.num_samples,
-            target_byte: self.target_byte,
             guess_range: self.guess_range,
             sum_traces: self.sum_traces + rhs.sum_traces,
             sum_square_traces: self.sum_square_traces + rhs.sum_square_traces,
@@ -324,9 +318,9 @@ mod tests {
         let plaintexts = array![[1usize], [3], [1], [2], [3], [2], [2], [1], [3], [1]];
 
         let leakage_model = |plaintext, guess| plaintext ^ guess;
-        let mut processor = CpaProcessor::new(traces.shape()[1], 256, 0);
+        let mut processor = CpaProcessor::new(traces.shape()[1], 256);
         for i in 0..traces.shape()[0] {
-            processor.update(traces.row(i), plaintexts.row(i), leakage_model);
+            processor.update(traces.row(i), plaintexts.row(i)[0], leakage_model);
         }
         assert_eq!(
             processor.finalize(leakage_model).corr(),
@@ -351,9 +345,9 @@ mod tests {
         let plaintexts = array![[1usize], [3], [1], [2], [3], [2], [2], [1], [3], [1]];
 
         let leakage_model = |value, guess| value ^ guess;
-        let mut processor = CpaProcessor::new(traces.shape()[1], 256, 0);
+        let mut processor = CpaProcessor::new(traces.shape()[1], 256);
         for i in 0..traces.shape()[0] {
-            processor.update(traces.row(i), plaintexts.row(i), leakage_model);
+            processor.update(traces.row(i), plaintexts.row(i)[0], leakage_model);
         }
 
         let serialized = serde_json::to_string(&processor).unwrap();
@@ -361,7 +355,6 @@ mod tests {
         let restored_processor = CpaProcessor::deserialize(&mut deserializer).unwrap();
 
         assert_eq!(processor.num_samples, restored_processor.num_samples);
-        assert_eq!(processor.target_byte, restored_processor.target_byte);
         assert_eq!(processor.guess_range, restored_processor.guess_range);
         assert_eq!(processor.sum_traces, restored_processor.sum_traces);
         assert_eq!(

@@ -13,12 +13,12 @@ pub fn leakage_model(plaintext: usize, guess: usize) -> usize {
 }
 
 fn cpa_sequential(traces: &Array2<f64>, plaintexts: &Array2<u8>) -> Cpa {
-    let mut cpa = CpaProcessor::new(traces.shape()[1], 256, 0);
+    let mut cpa = CpaProcessor::new(traces.shape()[1], 256);
 
     for i in 0..traces.shape()[0] {
         cpa.update(
             traces.row(i).map(|&x| x as usize).view(),
-            plaintexts.row(i).map(|&y| y as usize).view(),
+            plaintexts.row(i)[0] as usize,
             leakage_model,
         );
     }
