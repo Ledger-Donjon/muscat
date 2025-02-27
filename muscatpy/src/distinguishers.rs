@@ -6,28 +6,6 @@ use numpy::{
 use pyo3::prelude::*;
 use pyo3::types::PyFunction;
 
-#[pyclass]
-pub struct Cpa(muscat::distinguishers::cpa::Cpa);
-
-#[pymethods]
-impl Cpa {
-    pub fn rank<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<usize>> {
-        self.0.rank().into_pyarray_bound(py)
-    }
-
-    pub fn corr<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f32>> {
-        self.0.corr().to_owned().into_pyarray_bound(py)
-    }
-
-    pub fn best_guess(&self) -> usize {
-        self.0.best_guess()
-    }
-
-    pub fn max_corr<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f32>> {
-        self.0.max_corr().into_pyarray_bound(py)
-    }
-}
-
 #[pyfunction]
 pub fn compute_cpa<'py>(
     leakages: &Bound<'py, PyArray2<usize>>,
@@ -88,27 +66,24 @@ pub fn compute_cpa_normal<'py>(
 }
 
 #[pyclass]
-pub struct Dpa(muscat::distinguishers::dpa::Dpa);
+pub struct Cpa(muscat::distinguishers::cpa::Cpa);
 
 #[pymethods]
-impl Dpa {
+impl Cpa {
     pub fn rank<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<usize>> {
-        self.0.rank().into_pyarray_bound(py)
+        self.0.rank().into_pyarray(py)
     }
 
-    pub fn differential_curves<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f32>> {
-        self.0
-            .differential_curves()
-            .to_owned()
-            .into_pyarray_bound(py)
+    pub fn corr<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f32>> {
+        self.0.corr().to_owned().into_pyarray(py)
     }
 
     pub fn best_guess(&self) -> usize {
         self.0.best_guess()
     }
 
-    pub fn max_differential_curves<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f32>> {
-        self.0.max_differential_curves().into_pyarray_bound(py)
+    pub fn max_corr<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f32>> {
+        self.0.max_corr().into_pyarray(py)
     }
 }
 
@@ -143,6 +118,28 @@ pub fn compute_dpa<'py>(
         |p, guess| selections[[p, guess]] == 1,
         batch_size,
     ))
+}
+
+#[pyclass]
+pub struct Dpa(muscat::distinguishers::dpa::Dpa);
+
+#[pymethods]
+impl Dpa {
+    pub fn rank<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<usize>> {
+        self.0.rank().into_pyarray(py)
+    }
+
+    pub fn differential_curves<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f32>> {
+        self.0.differential_curves().to_owned().into_pyarray(py)
+    }
+
+    pub fn best_guess(&self) -> usize {
+        self.0.best_guess()
+    }
+
+    pub fn max_differential_curves<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f32>> {
+        self.0.max_differential_curves().into_pyarray(py)
+    }
 }
 
 #[pymodule]

@@ -28,7 +28,7 @@ pub fn compute_snr<'py>(
         |i| leakages_class[i],
         batch_size,
     )
-    .into_pyarray_bound(leakages.py())
+    .into_pyarray(leakages.py())
 }
 
 #[pyfunction]
@@ -42,7 +42,7 @@ pub fn compute_ttest<'py>(
         trace_classes.readonly().as_array(),
         batch_size,
     )
-    .into_pyarray_bound(traces.py())
+    .into_pyarray(traces.py())
 }
 
 #[pymodule]

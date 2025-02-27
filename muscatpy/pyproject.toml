@@ -1,16 +1,35 @@
 [build-system]
-requires = ["maturin>=1.5,<2.0"]
+requires = ["maturin>=1.7,<2.0"]
 build-backend = "maturin"
 
 [project]
 name = "muscatpy"
-requires-python = ">=3.8"
+description = "Multithreaded Side Channel Attacks Tool"
+version = "0.2.0"
+requires-python = ">=3.9"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dynamic = ["version"]
+dependencies = [
+    "numpy<2.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/Ledger-Donjon/muscat"
+# Documentation = ""
+Repository = "https://github.com/Ledger-Donjon/muscat.git"
+Issues = "https://github.com/Ledger-Donjon/muscat/issues"
+Changelog = "https://github.com/Ledger-Donjon/muscat/blob/master/CHANGELOG.md"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.4"
