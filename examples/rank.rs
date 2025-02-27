@@ -2,8 +2,9 @@ use anyhow::Result;
 use indicatif::ProgressIterator;
 use muscat::distinguishers::cpa::CpaProcessor;
 use muscat::leakage_model::{aes::sbox, hw};
-use muscat::util::{progress_bar, read_array2_from_npy_file, save_array};
-use ndarray::s;
+use muscat::util::progress_bar;
+use ndarray::{s, Array2};
+use ndarray_npy::{read_npy, write_npy};
 use rayon::prelude::{ParallelBridge, ParallelIterator};
 
 // traces format
@@ -26,8 +27,8 @@ fn rank() -> Result<()> {
     for file in (0..nfiles).progress_with(progress_bar(nfiles)) {
         let dir_l = format!("{folder}/l{file}.npy");
         let dir_p = format!("{folder}/p{file}.npy");
-        let traces = read_array2_from_npy_file::<FormatTraces>(&dir_l)?;
-        let plaintext = read_array2_from_npy_file::<FormatMetadata>(&dir_p)?;
+        let traces: Array2<FormatTraces> = read_npy(&dir_l)?;
+        let plaintext: Array2<FormatMetadata> = read_npy(&dir_p)?;
         for sample in (0..traces.shape()[0]).step_by(batch_size) {
             let l_sample: ndarray::ArrayBase<
                 ndarray::ViewRepr<&FormatTraces>,
@@ -58,7 +59,7 @@ fn rank() -> Result<()> {
     let rank = rank.finalize(leakage_model);
 
     // save rank key curves in npy
-    save_array("../results/rank.npy", &rank.rank().map(|&x| x as u64))?;
+    write_npy("../results/rank.npy", &rank.rank().map(|&x| x as u64))?;
 
     Ok(())
 }

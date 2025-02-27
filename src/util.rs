@@ -1,11 +1,8 @@
 //! Convenient utility functions.
 
-use std::{cmp::Ordering, io::Read, path::Path};
+use std::{cmp::Ordering, io::Read};
 
-use ndarray::{Array, Array1, Array2, ArrayView1, ArrayView2, Axis};
-use ndarray_npy::{
-    read_npy, write_npy, ReadNpyError, ReadableElement, WritableElement, WriteNpyError,
-};
+use ndarray::{Array, Array1, ArrayView1, ArrayView2, Axis};
 use npyz::{Deserialize, NpyFile};
 
 #[cfg(feature = "progress_bar")]
@@ -27,23 +24,6 @@ pub fn read_array1_from_npy_file<T: Deserialize, R: Read>(npy: NpyFile<R>) -> Ar
     Array::from_vec(v)
 }
 
-/// Writes an [`ndarray::ArrayBase`] to a new file, in npy format.
-///
-/// # Arguments
-///
-/// * `path` - Output file path. If a file already exists, it is overwritten.
-/// * `array` - Array to be saved.
-pub fn save_array<
-    T: ndarray_npy::WritableElement,
-    S: ndarray::Data<Elem = T>,
-    D: ndarray::Dimension,
->(
-    path: impl AsRef<Path>,
-    array: &ndarray::ArrayBase<S, D>,
-) -> Result<(), WriteNpyError> {
-    write_npy(path, array)
-}
-
 /// Creates a [`ProgressBar`] with a predefined default style.
 #[cfg(feature = "progress_bar")]
 pub fn progress_bar(len: usize) -> ProgressBar {
@@ -52,19 +32,6 @@ pub fn progress_bar(len: usize) -> ProgressBar {
     );
     progress_bar.enable_steady_tick(Duration::new(0, 100000000));
     progress_bar
-}
-
-pub fn read_array2_from_npy_file<T: ReadableElement>(
-    path: impl AsRef<Path>,
-) -> Result<Array2<T>, ReadNpyError> {
-    read_npy(path)
-}
-
-pub fn save_array2<T>(path: impl AsRef<Path>, array: ArrayView2<T>) -> Result<(), WriteNpyError>
-where
-    T: WritableElement,
-{
-    write_npy(path, &array)
 }
 
 /// Return an array where the i-th element contains the maximum of the i-th row of the input array.
