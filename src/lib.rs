@@ -7,7 +7,7 @@ pub mod processors;
 pub mod trace;
 pub mod util;
 
-pub use crate::error::Error;
-
 #[cfg(feature = "quicklog")]
 pub mod quicklog;
+
+pub use crate::error::Error;

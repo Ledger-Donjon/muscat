@@ -12,15 +12,11 @@ pub fn leakage_model(plaintext: usize, guess: usize) -> usize {
     hw(sbox((plaintext ^ guess) as u8) as usize)
 }
 
-fn cpa_sequential(traces: &Array2<f64>, plaintexts: &Array2<u8>) -> Cpa {
+fn cpa_sequential(traces: &Array2<u8>, plaintexts: &Array2<u8>) -> Cpa {
     let mut cpa = CpaProcessor::new(traces.shape()[1], 256);
 
     for i in 0..traces.shape()[0] {
-        cpa.update(
-            traces.row(i).map(|&x| x as usize).view(),
-            plaintexts.row(i)[0] as usize,
-            leakage_model,
-        );
+        cpa.update(traces.row(i), plaintexts.row(i)[0] as usize, leakage_model);
     }
 
     cpa.finalize(leakage_model)
@@ -68,7 +64,11 @@ fn bench_cpa(c: &mut Criterion) {
         group.bench_with_input(
             BenchmarkId::new("cpa_sequential", num_traces),
             &(&traces, &plaintexts),
-            |b, (traces, plaintexts)| b.iter(|| cpa_sequential(traces, plaintexts)),
+            |b, (traces, plaintexts)| {
+                b.iter(|| {
+                    cpa_sequential(&traces.map(|&x| ((x + 2.) * (256. / 4.)) as u8), plaintexts)
+                })
+            },
         );
         group.bench_with_input(
             BenchmarkId::new("cpa_parallel", num_traces),
@@ -76,7 +76,7 @@ fn bench_cpa(c: &mut Criterion) {
             |b, (traces, plaintexts)| {
                 b.iter(|| {
                     cpa::cpa(
-                        traces.map(|&x| x as usize).view(),
+                        traces.map(|&x| ((x + 2.) * (256. / 4.)) as u8).view(),
                         plaintexts.map(|&x| x as usize).view(),
                         256,
                         0,
