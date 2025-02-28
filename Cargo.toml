@@ -31,26 +31,25 @@ serde = { version = "1.0.214", features = ["derive"] }
 criterion = "0.5.1"
 ndarray-rand = "0.15.0"
 anyhow = "1.0.92"
+gnuplot = "0.0.45"
 
 [[example]]
 name = "cpa"
-required-features = ["progress_bar"]
 
 [[example]]
-name = "cpa_partitioned"
-required-features = ["progress_bar"]
+name = "cpa_normal"
 
 [[example]]
 name = "dpa"
-required-features = ["progress_bar"]
+required-features = []
 
 [[example]]
 name = "rank"
 required-features = ["progress_bar"]
-[[example]]
 
+[[example]]
 name = "snr"
-required-features = ["progress_bar"]
+required-features = ["progress_bar", "quicklog"]
 
 [[bench]]
 name = "cpa"

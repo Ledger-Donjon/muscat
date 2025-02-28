@@ -1,128 +1,47 @@
-use anyhow::Result;
-use indicatif::ProgressIterator;
-use muscat::distinguishers::dpa::DpaProcessor;
-use muscat::leakage_model::aes::sbox;
-use ndarray::{s, Array1, Array2};
+use std::{env, iter::zip, path::PathBuf};
+
+use gnuplot::{Figure, PlotOption::Caption};
+use muscat::{distinguishers::dpa::DpaProcessor, leakage_model::aes::sbox};
+use ndarray::Array2;
 use ndarray_npy::read_npy;
-use rayon::iter::{ParallelBridge, ParallelIterator};
 
-// traces format
-type FormatTraces = f64;
-type FormatMetadata = u8;
-
-pub fn selection_function(value: Array1<FormatMetadata>, guess: usize) -> bool {
-    (sbox((value[1] as usize ^ guess) as u8)) as usize & 1 == 1
+fn selection_function(plaintext_byte: u8, guess: usize) -> bool {
+    sbox(plaintext_byte ^ guess as u8) & 1 == 1
 }
 
-fn dpa() -> Result<()> {
-    let start_sample = 0;
-    let end_sample = 2000;
-    let size = end_sample - start_sample; // Number of samples
-    let guess_range = 256; // 2**(key length)
-    let folder = String::from("../../data/cw");
-    let dir_l = format!("{folder}/leakages.npy");
-    let dir_p = format!("{folder}/plaintexts.npy");
-    let traces: Array2<FormatTraces> = read_npy(&dir_l)?;
-    let plaintext: Array2<FormatMetadata> = read_npy(&dir_p)?;
-    let len_traces = 20000; //traces.shape()[0];
-    let mut dpa_proc = DpaProcessor::new(size, guess_range);
-    for i in (0..len_traces).progress() {
-        let tmp_trace = traces
-            .row(i)
-            .slice(s![start_sample..end_sample])
-            .mapv(|t| t as f32);
-        let tmp_metadata = plaintext.row(i);
-        dpa_proc.update(
-            tmp_trace.view(),
-            tmp_metadata.to_owned(),
+fn main() {
+    let traces_dir =
+        PathBuf::from(env::var("TRACES_DIR").expect("Missing TRACES_DIR environment variable"));
+
+    let traces: Array2<f64> = read_npy(traces_dir.join("traces.npy")).unwrap();
+    let plaintexts: Array2<u8> = read_npy(traces_dir.join("plaintexts.npy")).unwrap();
+    assert_eq!(traces.shape()[0], plaintexts.shape()[0]);
+
+    // Let's recover the first byte of the key
+    let mut processor = DpaProcessor::new(traces.shape()[1], 256);
+    for (trace, plaintext) in zip(traces.rows(), plaintexts.rows()) {
+        processor.update(
+            // Convert chipwhisperer float to int
+            trace.mapv(|x| ((x + 1.) * 1024.) as u16).view(),
+            plaintext[0],
             selection_function,
         );
     }
-    let dpa = dpa_proc.finalize();
-    println!("Guessed key = {:02x}", dpa.best_guess());
-    // let corr = dpa.corr();
 
-    Ok(())
-}
+    let dpa = processor.finalize();
 
-#[allow(dead_code)]
-fn dpa_success() -> Result<()> {
-    let start_sample = 0;
-    let end_sample = 2000;
-    let size = end_sample - start_sample; // Number of samples
-    let guess_range = 256; // 2**(key length)
-    let folder = String::from("../../data/cw");
-    let dir_l = format!("{folder}/leakages.npy");
-    let dir_p = format!("{folder}/plaintexts.npy");
-    let traces: Array2<FormatTraces> = read_npy(&dir_l)?;
-    let plaintext: Array2<FormatMetadata> = read_npy(&dir_p)?;
-    let len_traces = traces.shape()[0];
-    let mut dpa_proc = DpaProcessor::new(size, guess_range);
-    let rank_traces: usize = 100;
+    let best_guess = dpa.best_guess();
+    println!("Best subkey guess: {:?}", best_guess);
 
-    let mut rank = Array1::zeros(guess_range);
-    for i in (0..len_traces).progress() {
-        let tmp_trace = traces
-            .row(i)
-            .slice(s![start_sample..end_sample])
-            .mapv(|t| t as f32);
-        let tmp_metadata = plaintext.row(i).to_owned();
-        dpa_proc.update(tmp_trace.view(), tmp_metadata, selection_function);
+    // // Let's plot correlation coefficients of the best guess
+    let differential_curves = dpa.differential_curves();
+    let differential_curve = differential_curves.row(best_guess);
 
-        if i % rank_traces == 0 {
-            // rank can be saved to get its evolution
-            rank = dpa_proc.finalize().rank();
-        }
-    }
-
-    let dpa = dpa_proc.finalize();
-    println!("Guessed key = {:02x}", dpa.best_guess());
-    println!("{:?}", rank);
-
-    Ok(())
-}
-
-#[allow(dead_code)]
-fn dpa_parallel() -> Result<()> {
-    let start_sample = 0;
-    let end_sample = 2000;
-    let size = end_sample - start_sample; // Number of samples
-    let guess_range = 256; // 2**(key length)
-    let folder = String::from("../../data/cw");
-    let dir_l = format!("{folder}/leakages.npy");
-    let dir_p = format!("{folder}/plaintexts.npy");
-    let traces: Array2<FormatTraces> = read_npy(&dir_l)?;
-    let plaintext: Array2<FormatMetadata> = read_npy(&dir_p)?;
-    let len_traces = 20000; // traces.shape()[0];
-    let batch = 2500;
-    let dpa = (0..len_traces)
-        .step_by(batch)
-        .par_bridge()
-        .map(|range_rows| {
-            let tmp_traces = traces
-                .slice(s![range_rows..range_rows + batch, start_sample..end_sample])
-                .mapv(|l| l as f32);
-            let tmp_metadata = plaintext
-                .slice(s![range_rows..range_rows + batch, ..])
-                .to_owned();
-
-            let mut dpa_inner = DpaProcessor::new(size, guess_range);
-            for i in 0..batch {
-                let trace = tmp_traces.row(i);
-                let metadata = tmp_metadata.row(i).to_owned();
-                dpa_inner.update(trace, metadata, selection_function);
-            }
-            dpa_inner
-        })
-        .reduce(|| DpaProcessor::new(size, guess_range), |x, y| x + y)
-        .finalize();
-
-    println!("{:2x}", dpa.best_guess());
-    // let corr = dpa.corr();
-
-    Ok(())
-}
-
-fn main() -> Result<()> {
-    dpa()
+    let mut fg = Figure::new();
+    fg.axes2d().lines(
+        0..differential_curve.len(),
+        differential_curve,
+        &[Caption("Differential curve")],
+    );
+    fg.show().unwrap();
 }
