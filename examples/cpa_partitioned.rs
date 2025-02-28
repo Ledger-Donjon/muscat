@@ -39,7 +39,7 @@ fn cpa() -> Result<()> {
             let mut c = CpaProcessor::new(size, guess_range);
             for i in 0..batch.0.shape()[0] {
                 c.update(
-                    batch.0.row(i).map(|x| *x as usize).view(),
+                    batch.0.row(i).view(),
                     batch.1.row(i)[target_byte] as usize,
                     leakage_model,
                 );

@@ -1,7 +1,14 @@
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
+use num_traits::{AsPrimitive, Zero};
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use serde::{Deserialize, Serialize};
-use std::{fs::File, iter::zip, marker::PhantomData, ops::Add, path::Path};
+use std::{
+    fs::File,
+    iter::zip,
+    marker::PhantomData,
+    ops::{Add, AddAssign},
+    path::Path,
+};
 
 use crate::{
     util::{argmax_by, argsort_by, max_per_row},
@@ -64,7 +71,8 @@ pub fn dpa<T, M, F>(
     batch_size: usize,
 ) -> Dpa
 where
-    T: Into<f32> + Copy + Sync,
+    T: Containable + Copy + Sync,
+    <T as Containable>::Container: Send,
     M: Clone + Send + Sync,
     F: Fn(M, usize) -> bool + Send + Sync + Copy,
 {
@@ -131,15 +139,22 @@ impl Dpa {
 /// [^1]: <https://paulkocher.com/doc/DifferentialPowerAnalysis.pdf>
 /// [^2]: <https://web.mit.edu/6.857/OldStuff/Fall03/ref/kocher-DPATechInfo.pdf>
 #[derive(Serialize, Deserialize)]
-pub struct DpaProcessor<M> {
+pub struct DpaProcessor<T, M>
+where
+    T: Containable,
+{
     /// Number of samples per trace
     num_samples: usize,
     /// Guess range upper excluded bound
     guess_range: usize,
     /// Sum of traces for which the selection function equals false
-    sum_0: Array2<f32>,
+    #[serde(bound(serialize = "<T as Containable>::Container: Serialize"))]
+    #[serde(bound(deserialize = "<T as Containable>::Container: Deserialize<'de>"))]
+    sum_0: Array2<<T as Containable>::Container>,
     /// Sum of traces for which the selection function equals true
-    sum_1: Array2<f32>,
+    #[serde(bound(serialize = "<T as Containable>::Container: Serialize"))]
+    #[serde(bound(deserialize = "<T as Containable>::Container: Deserialize<'de>"))]
+    sum_1: Array2<<T as Containable>::Container>,
     /// Number of traces processed for which the selection function equals false
     count_0: Array1<usize>,
     /// Number of traces processed for which the selection function equals true
@@ -149,8 +164,9 @@ pub struct DpaProcessor<M> {
     _metadata: PhantomData<M>,
 }
 
-impl<M> DpaProcessor<M>
+impl<T, M> DpaProcessor<T, M>
 where
+    T: Containable + Copy,
     M: Clone,
 {
     pub fn new(num_samples: usize, guess_range: usize) -> Self {
@@ -168,9 +184,8 @@ where
 
     /// # Panics
     /// Panic in debug if `trace.shape()[0] != self.num_samples`.
-    pub fn update<T, F>(&mut self, trace: ArrayView1<T>, metadata: M, selection_function: F)
+    pub fn update<F>(&mut self, trace: ArrayView1<T>, metadata: M, selection_function: F)
     where
-        T: Into<f32> + Copy,
         F: Fn(M, usize) -> bool,
     {
         debug_assert_eq!(trace.shape()[0], self.num_samples);
@@ -197,8 +212,8 @@ where
         let mut differential_curves = Array2::zeros((self.guess_range, self.num_samples));
         for guess in 0..self.guess_range {
             for i in 0..self.num_samples {
-                let mean_0 = self.sum_0[[guess, i]] / self.count_0[guess] as f32;
-                let mean_1 = self.sum_1[[guess, i]] / self.count_1[guess] as f32;
+                let mean_0 = self.sum_0[[guess, i]].as_() / self.count_0[guess] as f32;
+                let mean_1 = self.sum_1[[guess, i]].as_() / self.count_1[guess] as f32;
 
                 differential_curves[[guess, i]] = f32::abs(mean_0 - mean_1);
             }
@@ -209,6 +224,19 @@ where
         }
     }
 
+    /// Determine if two [`DpaProcessor`] are compatible for addition.
+    ///
+    /// If they were created with the same parameters, they are compatible.
+    fn is_compatible_with(&self, other: &Self) -> bool {
+        self.num_samples == other.num_samples && self.guess_range == other.guess_range
+    }
+}
+
+impl<T, M> DpaProcessor<T, M>
+where
+    T: Containable + Serialize,
+    <T as Containable>::Container: Serialize,
+{
     /// Save the [`DpaProcessor`] to a file.
     ///
     /// # Warning
@@ -220,7 +248,13 @@ where
 
         Ok(())
     }
+}
 
+impl<T, M> DpaProcessor<T, M>
+where
+    T: Containable + for<'de> Deserialize<'de>,
+    <T as Containable>::Container: for<'de> Deserialize<'de>,
+{
     /// Load a [`DpaProcessor`] from a file.
     ///
     /// # Warning
@@ -228,21 +262,15 @@ where
     /// change between versions.
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let file = File::open(path)?;
-        let p: DpaProcessor<M> = serde_json::from_reader(file)?;
+        let p: DpaProcessor<T, M> = serde_json::from_reader(file)?;
 
         Ok(p)
     }
-
-    /// Determine if two [`DpaProcessor`] are compatible for addition.
-    ///
-    /// If they were created with the same parameters, they are compatible.
-    fn is_compatible_with(&self, other: &Self) -> bool {
-        self.num_samples == other.num_samples && self.guess_range == other.guess_range
-    }
 }
 
-impl<M> Add for DpaProcessor<M>
+impl<T, M> Add for DpaProcessor<T, M>
 where
+    T: Containable + Copy,
     M: Clone,
 {
     type Output = Self;
@@ -268,6 +296,34 @@ where
         }
     }
 }
+
+/// This trait provide a bigger container type to computations with [`Self`] types.
+///
+/// In `muscat`, this is used, for instance, to hold sums of millions of elements that could
+/// otherwise overflow if summing [`Self`] types.
+///
+/// # Dyn compatibility
+/// This trait is not [dyn compatible](https://doc.rust-lang.org/nightly/reference/items/traits.html#dyn-compatibility).
+///
+/// # Limitations
+/// We are assuming that the sum of [`Container`] types will not overflow.
+pub trait Containable: Sized {
+    type Container: Zero + AddAssign + AsPrimitive<f32> + Clone + Copy + From<Self>;
+}
+
+macro_rules! impl_containable {
+    ($($t:ty),* => $c:ty) => {
+        $(
+            impl Containable for $t {
+                type Container = $c;
+            }
+        )*
+    };
+}
+
+impl_containable! { u8, u16, u32, u64 => u64 }
+impl_containable! { i8, i16, i32, i64 => i64 }
+impl_containable! { f32 => f32 }
 
 #[cfg(test)]
 mod tests {
@@ -348,7 +404,7 @@ mod tests {
         let serialized = serde_json::to_string(&processor).unwrap();
         let mut deserializer = serde_json::Deserializer::from_str(serialized.as_str());
         let restored_processor =
-            DpaProcessor::<ArrayView1<u8>>::deserialize(&mut deserializer).unwrap();
+            DpaProcessor::<f32, ArrayView1<u8>>::deserialize(&mut deserializer).unwrap();
 
         assert_eq!(processor.num_samples, restored_processor.num_samples);
         assert_eq!(processor.guess_range, restored_processor.guess_range);

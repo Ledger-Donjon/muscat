@@ -3,12 +3,52 @@ use crate::{
     Error,
 };
 use ndarray::{s, Array1, Array2, ArrayView1, ArrayView2, Axis};
+use num_traits::{AsPrimitive, Zero};
 use rayon::{
     iter::ParallelBridge,
     prelude::{IntoParallelIterator, ParallelIterator},
 };
 use serde::{Deserialize, Serialize};
-use std::{fs::File, iter::zip, ops::Add, path::Path};
+use std::{
+    fmt::Debug,
+    fs::File,
+    iter::zip,
+    ops::{Add, AddAssign, Mul},
+    path::Path,
+};
+
+/// Result of the CPA[^1] on some traces.
+///
+/// [^1]: <https://www.iacr.org/archive/ches2004/31560016/31560016.pdf>
+#[derive(Debug)]
+pub struct Cpa {
+    /// Pearson correlation coefficients
+    pub(crate) corr: Array2<f32>,
+}
+
+impl Cpa {
+    /// Rank guesses.
+    pub fn rank(&self) -> Array1<usize> {
+        let rank = argsort_by(&self.max_corr().to_vec()[..], f32::total_cmp);
+
+        Array1::from_vec(rank)
+    }
+
+    /// Return the Pearson correlation coefficients.
+    pub fn corr(&self) -> ArrayView2<f32> {
+        self.corr.view()
+    }
+
+    /// Return the guess with the highest Pearson correlation coefficient.
+    pub fn best_guess(&self) -> usize {
+        argmax_by(self.max_corr().view(), f32::total_cmp)
+    }
+
+    /// Return the maximum Pearson correlation coefficient for each guess.
+    pub fn max_corr(&self) -> Array1<f32> {
+        max_per_row(self.corr.view())
+    }
+}
 
 /// Compute the [`Cpa`] of the given traces using [`CpaProcessor`].
 ///
@@ -57,7 +97,8 @@ pub fn cpa<T, P, F>(
     batch_size: usize,
 ) -> Cpa
 where
-    T: Into<usize> + Copy + Sync,
+    T: Containable + Copy + Sync,
+    <T as Containable>::Container: Send + Sync,
     P: Into<usize> + Copy + Sync,
     F: Fn(usize, usize) -> usize + Send + Sync + Copy,
 {
@@ -89,66 +130,45 @@ where
     .finalize(leakage_model)
 }
 
-/// Result of the CPA[^1] on some traces.
-///
-/// [^1]: <https://www.iacr.org/archive/ches2004/31560016/31560016.pdf>
-#[derive(Debug)]
-pub struct Cpa {
-    /// Pearson correlation coefficients
-    pub(crate) corr: Array2<f32>,
-}
-
-impl Cpa {
-    /// Rank guesses.
-    pub fn rank(&self) -> Array1<usize> {
-        let rank = argsort_by(&self.max_corr().to_vec()[..], f32::total_cmp);
-
-        Array1::from_vec(rank)
-    }
-
-    /// Return the Pearson correlation coefficients.
-    pub fn corr(&self) -> ArrayView2<f32> {
-        self.corr.view()
-    }
-
-    /// Return the guess with the highest Pearson correlation coefficient.
-    pub fn best_guess(&self) -> usize {
-        argmax_by(self.max_corr().view(), f32::total_cmp)
-    }
-
-    /// Return the maximum Pearson correlation coefficient for each guess.
-    pub fn max_corr(&self) -> Array1<f32> {
-        max_per_row(self.corr.view())
-    }
-}
-
 /// A processor that computes the [`Cpa`] of the given traces.
 ///
 /// It implements algorithm 4 from [^1].
 ///
 /// [^1]: <https://eprint.iacr.org/2013/794.pdf>
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
-pub struct CpaProcessor {
+#[derive(Serialize, Deserialize)]
+pub struct CpaProcessor<T>
+where
+    T: Containable,
+{
     /// Number of samples per trace
     num_samples: usize,
     /// Guess range upper excluded bound
     guess_range: usize,
     /// Sum of traces
-    sum_traces: Array1<usize>,
+    #[serde(bound(serialize = "<T as Containable>::Container: Serialize"))]
+    #[serde(bound(deserialize = "<T as Containable>::Container: Deserialize<'de>"))]
+    sum_traces: Array1<<T as Containable>::Container>,
     /// Sum of square of traces
-    sum_square_traces: Array1<usize>,
+    #[serde(bound(serialize = "<T as Containable>::Container: Serialize"))]
+    #[serde(bound(deserialize = "<T as Containable>::Container: Deserialize<'de>"))]
+    sum_square_traces: Array1<<T as Containable>::Container>,
     /// Sum of traces per key guess
     guess_sum_traces: Array1<usize>,
     /// Sum of square of traces per key guess
     guess_sum_squares_traces: Array1<usize>,
     /// Sum of traces per plaintext used
     /// See 4.3 in <https://eprint.iacr.org/2013/794.pdf>
-    plaintext_sum_traces: Array2<usize>,
+    #[serde(bound(serialize = "<T as Containable>::Container: Serialize"))]
+    #[serde(bound(deserialize = "<T as Containable>::Container: Deserialize<'de>"))]
+    plaintext_sum_traces: Array2<<T as Containable>::Container>,
     /// Number of traces processed
     num_traces: usize,
 }
 
-impl CpaProcessor {
+impl<T> CpaProcessor<T>
+where
+    T: Containable,
+{
     pub fn new(num_samples: usize, guess_range: usize) -> Self {
         Self {
             num_samples,
@@ -162,11 +182,23 @@ impl CpaProcessor {
         }
     }
 
+    /// Determine if two [`CpaProcessor`] are compatible for addition.
+    ///
+    /// If they were created with the same parameters, they are compatible.
+    fn is_compatible_with(&self, other: &Self) -> bool {
+        self.num_samples == other.num_samples && self.guess_range == other.guess_range
+    }
+}
+
+impl<T> CpaProcessor<T>
+where
+    T: Containable + Copy,
+    <T as Containable>::Container: Sync,
+{
     /// # Panics
     /// Panic in debug if `trace.shape()[0] != self.num_samples`.
-    pub fn update<T, P, F>(&mut self, trace: ArrayView1<T>, plaintext: P, leakage_model: F)
+    pub fn update<P, F>(&mut self, trace: ArrayView1<T>, plaintext: P, leakage_model: F)
     where
-        T: Into<usize> + Copy,
         P: Into<usize> + Copy,
         F: Fn(usize, usize) -> usize,
     {
@@ -174,10 +206,12 @@ impl CpaProcessor {
 
         let plaintext = plaintext.into();
         for i in 0..self.num_samples {
-            self.sum_traces[i] += trace[i].into();
-            self.sum_square_traces[i] += trace[i].into() * trace[i].into();
+            let t = trace[i].into();
 
-            self.plaintext_sum_traces[[plaintext, i]] += trace[i].into();
+            self.sum_traces[i] += t;
+            self.sum_square_traces[i] += t * t;
+
+            self.plaintext_sum_traces[[plaintext, i]] += t;
         }
 
         for guess in 0..self.guess_range {
@@ -210,17 +244,20 @@ impl CpaProcessor {
             let guess_corr: Vec<_> = (0..self.num_samples)
                 .into_par_iter()
                 .map(|u| {
-                    let mean_traces = self.sum_traces[u] as f32 / self.num_traces as f32;
+                    let mean_traces: f32 =
+                        <_ as AsPrimitive<f32>>::as_(self.sum_traces[u]) / self.num_traces as f32;
 
-                    let cov = self.sum_mult(
-                        self.plaintext_sum_traces.slice(s![.., u]),
-                        modeled_leakages.view(),
-                    );
+                    let cov = self
+                        .plaintext_sum_traces
+                        .slice(s![.., u])
+                        .mapv(|x| x.as_())
+                        .dot(&modeled_leakages.view());
                     let cov = cov as f32 / self.num_traces as f32 - (mean_key * mean_traces);
 
                     let mean_squares_traces =
-                        self.sum_square_traces[u] as f32 / self.num_traces as f32;
-                    let var_traces = mean_squares_traces - (mean_traces * mean_traces);
+                        <_ as AsPrimitive<f32>>::as_(self.sum_square_traces[u])
+                            / self.num_traces as f32;
+                    let var_traces: f32 = mean_squares_traces - (mean_traces * mean_traces);
                     f32::abs(cov / f32::sqrt(var_key * var_traces))
                 })
                 .collect();
@@ -233,11 +270,13 @@ impl CpaProcessor {
 
         Cpa { corr }
     }
+}
 
-    fn sum_mult(&self, a: ArrayView1<usize>, b: ArrayView1<usize>) -> usize {
-        a.dot(&b)
-    }
-
+impl<T> CpaProcessor<T>
+where
+    T: Containable + Serialize,
+    <T as Containable>::Container: Serialize,
+{
     /// Save the [`CpaProcessor`] to a file.
     ///
     /// # Warning
@@ -249,7 +288,13 @@ impl CpaProcessor {
 
         Ok(())
     }
+}
 
+impl<T> CpaProcessor<T>
+where
+    T: Containable + for<'de> Deserialize<'de>,
+    <T as Containable>::Container: for<'de> Deserialize<'de>,
+{
     /// Load a [`CpaProcessor`] from a file.
     ///
     /// # Warning
@@ -257,20 +302,16 @@ impl CpaProcessor {
     /// change between versions.
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let file = File::open(path)?;
-        let p: CpaProcessor = serde_json::from_reader(file)?;
+        let p: Self = serde_json::from_reader(file)?;
 
         Ok(p)
     }
-
-    /// Determine if two [`CpaProcessor`] are compatible for addition.
-    ///
-    /// If they were created with the same parameters, they are compatible.
-    fn is_compatible_with(&self, other: &Self) -> bool {
-        self.num_samples == other.num_samples && self.guess_range == other.guess_range
-    }
 }
 
-impl Add for CpaProcessor {
+impl<T> Add for CpaProcessor<T>
+where
+    T: Containable + Copy,
+{
     type Output = Self;
 
     /// Merge computations of two [`CpaProcessor`]. Processors need to be compatible to be merged
@@ -295,6 +336,41 @@ impl Add for CpaProcessor {
     }
 }
 
+/// This trait provide a bigger container type to computations with [`Self`] types.
+///
+/// In `muscat`, this is used, for instance, to hold sums of millions of elements that could
+/// otherwise overflow if summing [`Self`] types.
+///
+/// # Dyn compatibility
+/// This trait is not [dyn compatible](https://doc.rust-lang.org/nightly/reference/items/traits.html#dyn-compatibility).
+///
+/// # Limitations
+/// We are assuming that the sum of [`Container`] types will not overflow.
+pub trait Containable: Sized {
+    type Container: Zero
+        + Add
+        + AddAssign
+        + Mul<Output = Self::Container>
+        + AsPrimitive<f32>
+        + AsPrimitive<usize>
+        + Clone
+        + Copy
+        + From<Self>;
+}
+
+macro_rules! impl_containable {
+    ($($t:ty),* => $c:ty) => {
+        $(
+            impl Containable for $t {
+                type Container = $c;
+            }
+        )*
+    };
+}
+
+impl_containable! { u8, u16, u32, u64 => u64 }
+impl_containable! { i8, i16, i32, i64 => i64 }
+
 #[cfg(test)]
 mod tests {
     use super::{cpa, CpaProcessor};
@@ -304,7 +380,7 @@ mod tests {
     #[test]
     fn test_cpa_helper() {
         let traces = array![
-            [77usize, 137, 51, 91],
+            [77u8, 137, 51, 91],
             [72, 61, 91, 83],
             [39, 49, 52, 23],
             [26, 114, 63, 45],
@@ -331,7 +407,7 @@ mod tests {
     #[test]
     fn test_serialize_deserialize_processor() {
         let traces = array![
-            [77usize, 137, 51, 91],
+            [77u8, 137, 51, 91],
             [72, 61, 91, 83],
             [39, 49, 52, 23],
             [26, 114, 63, 45],
@@ -352,7 +428,8 @@ mod tests {
 
         let serialized = serde_json::to_string(&processor).unwrap();
         let mut deserializer = serde_json::Deserializer::from_str(serialized.as_str());
-        let restored_processor = CpaProcessor::deserialize(&mut deserializer).unwrap();
+        let restored_processor: CpaProcessor<u8> =
+            CpaProcessor::deserialize(&mut deserializer).unwrap();
 
         assert_eq!(processor.num_samples, restored_processor.num_samples);
         assert_eq!(processor.guess_range, restored_processor.guess_range);

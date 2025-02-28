@@ -41,7 +41,7 @@ fn rank() -> Result<()> {
                     || CpaProcessor::new(size, guess_range),
                     |mut r, n| {
                         r.update(
-                            l_sample.row(n).map(|l| *l as usize).view(),
+                            l_sample.row(n).view(),
                             p_sample.row(n)[target_byte] as usize,
                             leakage_model,
                         );
