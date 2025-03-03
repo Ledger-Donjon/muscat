@@ -3,7 +3,7 @@ use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods};
 use pyo3::prelude::*;
 
 #[pyfunction]
-pub fn compute_mean<'py>(traces: &Bound<'py, PyArray2<i64>>) -> Bound<'py, PyArray1<f64>> {
+pub fn compute_mean<'py>(traces: &Bound<'py, PyArray2<i64>>) -> Bound<'py, PyArray1<f32>> {
     let py = traces.py();
 
     let traces_ro = traces.readonly();
@@ -18,7 +18,7 @@ pub fn compute_mean<'py>(traces: &Bound<'py, PyArray2<i64>>) -> Bound<'py, PyArr
 }
 
 #[pyfunction]
-pub fn compute_var<'py>(traces: &Bound<'py, PyArray2<i64>>) -> Bound<'py, PyArray1<f64>> {
+pub fn compute_var<'py>(traces: &Bound<'py, PyArray2<i64>>) -> Bound<'py, PyArray1<f32>> {
     let py = traces.py();
 
     let traces_ro = traces.readonly();

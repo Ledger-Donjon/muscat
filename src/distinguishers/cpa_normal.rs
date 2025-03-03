@@ -223,7 +223,7 @@ where
 
 impl<T> CpaProcessor<T>
 where
-    T: Sample + Serialize,
+    T: Sample,
     <T as Sample>::Container: Serialize,
 {
     /// Save the [`CpaProcessor`] to a file.
@@ -241,7 +241,7 @@ where
 
 impl<T> CpaProcessor<T>
 where
-    T: Sample + for<'de> Deserialize<'de>,
+    T: Sample,
     <T as Sample>::Container: for<'de> Deserialize<'de>,
 {
     /// Load a [`CpaProcessor`] from a file.

@@ -6,7 +6,7 @@ use std::{
     ops::{Div, Range},
 };
 
-use crate::processors::MeanVar;
+use crate::{processors::MeanVar, Sample};
 
 /// Computes the centered product of "order" leakage samples
 /// Used particularly when performing high-order SCA
@@ -17,7 +17,7 @@ pub struct CenteredProduct {
     /// Number of traces processed
     count: usize,
     /// Mean of traces
-    mean: Array1<f64>,
+    mean: Array1<f32>,
     /// Indices of samples to combine
     intervals: Vec<Range<i32>>,
     /// Boolean to ensure that finalize function happened before apply
@@ -54,16 +54,16 @@ impl CenteredProduct {
     /// Compute the mean
     pub fn finalize(&mut self) {
         if self.count != 0 {
-            self.mean = self.acc.mapv(|x| x as f64 / self.count as f64)
+            self.mean = self.acc.mapv(|x| x as f32 / self.count as f32)
         }
         self.processed = true
     }
 
     /// Apply the processing to an input trace
     /// The centered product substract the mean of the traces and then perform products between every input time samples
-    pub fn apply<T: Into<f64> + Copy>(&self, trace: ArrayView1<T>) -> Array1<f64> {
+    pub fn apply<T: Into<f32> + Copy>(&self, trace: ArrayView1<T>) -> Array1<f32> {
         // First we substract the mean trace
-        let centered_trace: Array1<f64> = trace.mapv(|x| x.into()) - &self.mean;
+        let centered_trace: Array1<f32> = trace.mapv(|x| x.into()) - &self.mean;
         let length_out_trace: usize = self.intervals.iter().map(|x| x.len()).product();
 
         let mut centered_product_trace = Array1::ones(length_out_trace);
@@ -75,7 +75,7 @@ impl CenteredProduct {
 
         for (idx, combination) in multi_prod.enumerate() {
             for i in combination {
-                centered_product_trace[idx] *= centered_trace[i as usize] as f64;
+                centered_product_trace[idx] *= centered_trace[i as usize] as f32;
             }
         }
 
@@ -102,13 +102,13 @@ impl Power {
     }
 
     /// Processes an input trace
-    pub fn process<T: Into<i64> + Copy>(&self, trace: ArrayView1<T>) -> Array1<f64> {
+    pub fn process<T: Into<i64> + Copy>(&self, trace: ArrayView1<T>) -> Array1<f32> {
         // Concatenate the slices specified by the ranges
         let result: Array1<_> = self
             .intervals
             .iter()
             .flat_map(|range| trace.slice(s![range.clone()]).to_owned())
-            .map(|val| val.into() as f64)
+            .map(|val| val.into() as f32)
             .collect();
 
         result.mapv(|result| result.powi(self.power))
@@ -116,17 +116,22 @@ impl Power {
 }
 
 /// Standardization of the traces by removing the mean and scaling to unit variance
-#[derive(Debug)]
-pub struct StandardScaler {
+pub struct StandardScaler<T>
+where
+    T: Sample,
+{
     /// meanVar processor
-    meanvar: MeanVar,
+    meanvar: MeanVar<T>,
     /// mean
-    mean: Array1<f64>,
+    mean: Array1<f32>,
     /// std
-    std: Array1<f64>,
+    std: Array1<f32>,
 }
 
-impl StandardScaler {
+impl<T> StandardScaler<T>
+where
+    T: Sample + Copy,
+{
     pub fn new(size: usize) -> Self {
         Self {
             meanvar: MeanVar::new(size),
@@ -136,19 +141,19 @@ impl StandardScaler {
     }
 
     /// Processes an input trace to update internal accumulators.
-    pub fn process<T: Into<i64> + Copy>(&mut self, trace: ArrayView1<T>) {
+    pub fn process(&mut self, trace: ArrayView1<T>) {
         self.meanvar.process(trace);
     }
 
     /// Compute mean and var
     pub fn finalize(&mut self) {
         self.mean = self.meanvar.mean();
-        self.std = self.meanvar.var().mapv(f64::sqrt);
+        self.std = self.meanvar.var().mapv(f32::sqrt);
     }
 
     /// Apply the processing to an input trace
-    pub fn apply<T: Into<f64> + Copy>(&self, trace: ArrayView1<T>) -> Array1<f64> {
-        (trace.mapv(|x| x.into()) - &self.mean) / &self.std
+    pub fn apply(&self, trace: ArrayView1<T>) -> Array1<f32> {
+        (trace.mapv(|x| <T as Sample>::Container::from(x).as_()) - &self.mean) / &self.std
     }
 }
 
@@ -251,8 +256,8 @@ mod tests {
     use crate::preprocessors::{dist, CenteredProduct, ElasticAlignment, Power, StandardScaler};
     use ndarray::array;
 
-    fn round_to_2_digits(x: f64) -> f64 {
-        (x * 100f64).round() / 100f64
+    fn round_to_2_digits(x: f32) -> f32 {
+        (x * 100f32).round() / 100f32
     }
 
     #[test]
@@ -262,7 +267,7 @@ mod tests {
         processor.finalize();
         assert_eq!(
             processor.apply(array![0i16, 1i16, 2i16, -3i16, -4i16].view()),
-            array![0f64, 0f64, 0f64, 0f64]
+            array![0f32, 0f32, 0f32, 0f32]
         );
         let traces = [
             array![77, 137, 51, 91],
@@ -285,20 +290,22 @@ mod tests {
 
         let expected_results = [
             array![-11169.72, 61984.08],
-            array![-32942.77, -31440.82],
+            array![-32942.77, -31440.83],
             array![-540.46, -2533.96],
             array![-1521.45, 2049.30],
-            array![36499.87, 36969.02],
+            array![36499.88, 36969.02],
             array![-36199.24, -4675.44],
-            array![-3999.12, 37044.48],
+            array![-3999.12, 37044.47],
             array![-189.74, -279.84],
             array![-54268.83, -121223.88],
-            array![-46231.64, -130058.24],
+            array![-46231.64, -130058.23],
         ];
 
         for (i, t) in traces.iter().enumerate() {
             assert_eq!(
-                processor2.apply(t.view()).mapv(round_to_2_digits),
+                processor2
+                    .apply(t.mapv(|x| x as f32).view())
+                    .mapv(round_to_2_digits),
                 expected_results[i]
             );
         }
