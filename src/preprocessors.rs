@@ -1,12 +1,12 @@
 use itertools::Itertools;
-use ndarray::{s, Array1, ArrayView1};
+use ndarray::{Array1, ArrayView1, s};
 use num_traits::{AsPrimitive, One, Zero};
 use std::{
     cmp::Ordering,
     ops::{Div, Range},
 };
 
-use crate::{processors::MeanVar, Sample};
+use crate::{Sample, processors::MeanVar};
 
 /// Computes the centered product of "order" leakage samples
 /// Used particularly when performing high-order SCA
@@ -253,7 +253,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::preprocessors::{dist, CenteredProduct, ElasticAlignment, Power, StandardScaler};
+    use crate::preprocessors::{CenteredProduct, ElasticAlignment, Power, StandardScaler, dist};
     use ndarray::array;
 
     fn round_to_2_digits(x: f32) -> f32 {

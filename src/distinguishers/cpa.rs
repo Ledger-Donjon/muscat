@@ -1,6 +1,6 @@
 use crate::{
-    util::{argmax_by, argsort_by, max_per_row},
     Error, Sample,
+    util::{argmax_by, argsort_by, max_per_row},
 };
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
 use num_traits::AsPrimitive;
@@ -330,7 +330,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{cpa, CpaProcessor};
+    use super::{CpaProcessor, cpa};
     use ndarray::array;
     use serde::Deserialize;
 

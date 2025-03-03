@@ -1,9 +1,9 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use muscat::leakage_detection::{snr, SnrProcessor};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use muscat::leakage_detection::{SnrProcessor, snr};
 use ndarray::{Array1, Array2};
-use ndarray_rand::rand::{rngs::StdRng, SeedableRng};
-use ndarray_rand::rand_distr::Uniform;
 use ndarray_rand::RandomExt;
+use ndarray_rand::rand::{SeedableRng, rngs::StdRng};
+use ndarray_rand::rand_distr::Uniform;
 
 fn snr_sequential(traces: &Array2<i64>, plaintexts: &Array2<u8>) -> Array1<f64> {
     let mut snr = SnrProcessor::new(traces.shape()[1], 256);

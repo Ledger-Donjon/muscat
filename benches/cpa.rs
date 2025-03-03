@@ -1,11 +1,11 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use muscat::distinguishers::cpa::{self, Cpa, CpaProcessor};
 use muscat::distinguishers::cpa_normal;
 use muscat::leakage_model::{aes::sbox, hw};
 use ndarray::{Array2, ArrayView1, Axis};
-use ndarray_rand::rand::{rngs::StdRng, SeedableRng};
-use ndarray_rand::rand_distr::Uniform;
 use ndarray_rand::RandomExt;
+use ndarray_rand::rand::{SeedableRng, rngs::StdRng};
+use ndarray_rand::rand_distr::Uniform;
 use std::iter::zip;
 
 pub fn leakage_model(plaintext: usize, guess: usize) -> usize {

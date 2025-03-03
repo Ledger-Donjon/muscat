@@ -4,7 +4,7 @@ use rayon::iter::{ParallelBridge, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{fs::File, iter::zip, ops::Add, path::Path};
 
-use crate::{distinguishers::cpa::Cpa, Error, Sample};
+use crate::{Error, Sample, distinguishers::cpa::Cpa};
 
 /// Compute the [`Cpa`] of the given traces using [`CpaProcessor`].
 ///
@@ -291,8 +291,8 @@ where
 mod tests {
     use std::iter::zip;
 
-    use super::{cpa, CpaProcessor};
-    use ndarray::{array, ArrayView1, Axis};
+    use super::{CpaProcessor, cpa};
+    use ndarray::{ArrayView1, Axis, array};
     use serde::Deserialize;
 
     #[test]

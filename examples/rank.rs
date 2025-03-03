@@ -3,7 +3,7 @@ use indicatif::ProgressIterator;
 use muscat::distinguishers::cpa::CpaProcessor;
 use muscat::leakage_model::{aes::sbox, hw};
 use muscat::util::progress_bar;
-use ndarray::{s, Array2};
+use ndarray::{Array2, s};
 use ndarray_npy::{read_npy, write_npy};
 use rayon::prelude::{ParallelBridge, ParallelIterator};
 
