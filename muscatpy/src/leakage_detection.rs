@@ -1,8 +1,8 @@
 use numpy::{
+    IntoPyArray, PyArrayDescrMethods, PyArrayMethods, PyUntypedArray, PyUntypedArrayMethods,
     array::{PyArray1, PyArray2},
     dtype,
     ndarray::Array1,
-    IntoPyArray, PyArrayDescrMethods, PyArrayMethods, PyUntypedArray, PyUntypedArrayMethods,
 };
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;

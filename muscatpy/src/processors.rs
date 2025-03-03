@@ -1,7 +1,7 @@
 use muscat::processors::MeanVar;
 use numpy::{
-    dtype, IntoPyArray, PyArray1, PyArray2, PyArrayDescrMethods, PyArrayMethods, PyUntypedArray,
-    PyUntypedArrayMethods,
+    IntoPyArray, PyArray1, PyArray2, PyArrayDescrMethods, PyArrayMethods, PyUntypedArray,
+    PyUntypedArrayMethods, dtype,
 };
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;

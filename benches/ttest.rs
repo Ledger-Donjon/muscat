@@ -1,9 +1,9 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use muscat::leakage_detection::{ttest, TTestProcessor};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use muscat::leakage_detection::{TTestProcessor, ttest};
 use ndarray::{Array1, Array2};
-use ndarray_rand::rand::{rngs::StdRng, SeedableRng};
-use ndarray_rand::rand_distr::{Standard, Uniform};
 use ndarray_rand::RandomExt;
+use ndarray_rand::rand::{SeedableRng, rngs::StdRng};
+use ndarray_rand::rand_distr::{Standard, Uniform};
 
 fn ttest_sequential(traces: &Array2<i64>, trace_classes: &Array1<bool>) -> Array1<f64> {
     let mut ttest = TTestProcessor::new(traces.shape()[1]);

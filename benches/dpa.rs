@@ -1,10 +1,10 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use muscat::distinguishers::dpa::{dpa, Dpa, DpaProcessor};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use muscat::distinguishers::dpa::{Dpa, DpaProcessor, dpa};
 use muscat::leakage_model::aes::sbox;
 use ndarray::{Array1, Array2, ArrayView1};
-use ndarray_rand::rand::{rngs::StdRng, SeedableRng};
-use ndarray_rand::rand_distr::Uniform;
 use ndarray_rand::RandomExt;
+use ndarray_rand::rand::{SeedableRng, rngs::StdRng};
+use ndarray_rand::rand_distr::Uniform;
 
 fn selection_function(metadata: ArrayView1<u8>, guess: usize) -> bool {
     usize::from(sbox(metadata[1] ^ guess as u8)) & 1 == 1

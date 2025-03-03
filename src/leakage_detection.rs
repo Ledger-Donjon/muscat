@@ -1,6 +1,6 @@
 //! Leakage detection methods
-use crate::{processors::MeanVar, Error, Sample};
-use ndarray::{s, Array1, Array2, ArrayView1, ArrayView2, Axis};
+use crate::{Error, Sample, processors::MeanVar};
+use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis, s};
 use num_traits::AsPrimitive;
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use serde::{Deserialize, Serialize};
@@ -420,7 +420,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{snr, ttest, SnrProcessor, TTestProcessor};
+    use super::{SnrProcessor, TTestProcessor, snr, ttest};
     use ndarray::array;
 
     #[test]
@@ -486,8 +486,9 @@ mod tests {
             [0, 36, 35, 0],
             [93, 191, 49, 26],
         ];
-        let trace_classes =
-            array![true, false, false, true, false, false, true, false, false, true];
+        let trace_classes = array![
+            true, false, false, true, false, false, true, false, false, true
+        ];
 
         let mut processor = TTestProcessor::new(4);
         for (i, trace) in traces.rows().into_iter().enumerate() {
