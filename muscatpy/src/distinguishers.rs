@@ -1,20 +1,21 @@
 use numpy::{
     array::{PyArray1, PyArray2},
+    dtype,
     ndarray::Array2,
-    IntoPyArray, PyArrayMethods,
+    IntoPyArray, PyArrayDescrMethods, PyArrayMethods, PyUntypedArray, PyUntypedArrayMethods,
 };
-use pyo3::prelude::*;
 use pyo3::types::PyFunction;
+use pyo3::{exceptions::PyTypeError, prelude::*};
 
 #[pyfunction]
 pub fn compute_cpa<'py>(
-    leakages: &Bound<'py, PyArray2<usize>>,
+    traces: &Bound<'py, PyUntypedArray>,
     plaintexts: &Bound<'py, PyArray2<usize>>,
     guess_range: usize,
     target_byte: usize,
     leakage_func: &Bound<'py, PyFunction>,
     batch_size: usize,
-) -> Cpa {
+) -> PyResult<Cpa> {
     let mut modeled_leakages = Array2::zeros((guess_range, 256));
     for guess in 0..guess_range {
         for plaintext in 0..256 {
@@ -26,25 +27,51 @@ pub fn compute_cpa<'py>(
         }
     }
 
-    Cpa(muscat::distinguishers::cpa::cpa(
-        leakages.readonly().as_array(),
-        plaintexts.readonly().as_array(),
-        guess_range,
-        target_byte,
-        |guess, plaintext| modeled_leakages[[guess, plaintext]],
-        batch_size,
-    ))
+    if traces.ndim() != 2 {
+        return Err(PyTypeError::new_err(format!(
+            "Invalid traces ndim: {}. traces ndim should be equal to 2.",
+            traces.ndim()
+        )));
+    }
+
+    let sample_dtype = traces.dtype();
+
+    macro_rules! type_dispatch {
+        ($($ty:ty),*) => {
+            $(
+                if sample_dtype.is_equiv_to(&dtype::<$ty>(traces.py())) {
+                    let traces = traces.downcast::<PyArray2<$ty>>()?;
+
+                    return Ok(Cpa(muscat::distinguishers::cpa::cpa(
+                        traces.readonly().as_array(),
+                        plaintexts.readonly().as_array(),
+                        guess_range,
+                        target_byte,
+                        |guess, plaintext| modeled_leakages[[guess, plaintext]],
+                        batch_size,
+                    )));
+                }
+            )*
+        };
+    }
+
+    type_dispatch! { u8, u16, u32, u64, i8, i16, i32, i64, f32 }
+
+    Err(PyTypeError::new_err(format!(
+        "Unsupported traces dtype: {}.",
+        sample_dtype
+    )))
 }
 
 #[pyfunction]
 pub fn compute_cpa_normal<'py>(
-    leakages: &Bound<'py, PyArray2<f32>>,
+    traces: &Bound<'py, PyUntypedArray>,
     plaintexts: &Bound<'py, PyArray2<usize>>,
     guess_range: usize,
     target_byte: usize,
     leakage_func: &Bound<'py, PyFunction>,
     batch_size: usize,
-) -> Cpa {
+) -> PyResult<Cpa> {
     let mut modeled_leakages = Array2::zeros((guess_range, 256));
     for guess in 0..guess_range {
         for plaintext in 0..256 {
@@ -56,13 +83,39 @@ pub fn compute_cpa_normal<'py>(
         }
     }
 
-    Cpa(muscat::distinguishers::cpa_normal::cpa(
-        leakages.readonly().as_array(),
-        plaintexts.readonly().as_array(),
-        guess_range,
-        |plaintext, guess| modeled_leakages[[guess, plaintext[target_byte]]],
-        batch_size,
-    ))
+    if traces.ndim() != 2 {
+        return Err(PyTypeError::new_err(format!(
+            "Invalid traces ndim: {}. traces ndim should be equal to 2.",
+            traces.ndim()
+        )));
+    }
+
+    let sample_dtype = traces.dtype();
+
+    macro_rules! type_dispatch {
+        ($($ty:ty),*) => {
+            $(
+                if sample_dtype.is_equiv_to(&dtype::<$ty>(traces.py())) {
+                    let traces = traces.downcast::<PyArray2<$ty>>()?;
+
+                    return Ok(Cpa(muscat::distinguishers::cpa_normal::cpa(
+                        traces.readonly().as_array(),
+                        plaintexts.readonly().as_array(),
+                        guess_range,
+                        |plaintext, guess| modeled_leakages[[guess, plaintext[target_byte]]],
+                        batch_size,
+                    )));
+                }
+            )*
+        };
+    }
+
+    type_dispatch! { u8, u16, u32, u64, i8, i16, i32, i64, f32 }
+
+    Err(PyTypeError::new_err(format!(
+        "Unsupported traces dtype: {}.",
+        sample_dtype
+    )))
 }
 
 #[pyclass]
@@ -89,12 +142,12 @@ impl Cpa {
 
 #[pyfunction]
 pub fn compute_dpa<'py>(
-    leakages: &Bound<'py, PyArray2<f32>>,
+    traces: &Bound<'py, PyUntypedArray>,
     plaintexts: &Bound<'py, PyArray1<usize>>,
     guess_range: usize,
     selection_function: &Bound<'py, PyFunction>,
     batch_size: usize,
-) -> Dpa {
+) -> PyResult<Dpa> {
     let mut selections = Array2::zeros((256, guess_range));
     for p in 0..selections.shape()[0] {
         for guess in 0..selections.shape()[1] {
@@ -111,13 +164,39 @@ pub fn compute_dpa<'py>(
         }
     }
 
-    Dpa(muscat::distinguishers::dpa::dpa(
-        leakages.readonly().as_array(),
-        plaintexts.readonly().as_array(),
-        guess_range,
-        |p, guess| selections[[p, guess]] == 1,
-        batch_size,
-    ))
+    if traces.ndim() != 2 {
+        return Err(PyTypeError::new_err(format!(
+            "Invalid traces ndim: {}. traces ndim should be equal to 2.",
+            traces.ndim()
+        )));
+    }
+
+    let sample_dtype = traces.dtype();
+
+    macro_rules! type_dispatch {
+        ($($ty:ty),*) => {
+            $(
+                if sample_dtype.is_equiv_to(&dtype::<$ty>(traces.py())) {
+                    let traces = traces.downcast::<PyArray2<$ty>>()?;
+
+                    return Ok(Dpa(muscat::distinguishers::dpa::dpa(
+                        traces.readonly().as_array(),
+                        plaintexts.readonly().as_array(),
+                        guess_range,
+                        |p, guess| selections[[p, guess]] == 1,
+                        batch_size,
+                    )));
+                }
+            )*
+        };
+    }
+
+    type_dispatch! { u8, u16, u32, u64, i8, i16, i32, i64, f32 }
+
+    Err(PyTypeError::new_err(format!(
+        "Unsupported traces dtype: {}.",
+        sample_dtype
+    )))
 }
 
 #[pyclass]
