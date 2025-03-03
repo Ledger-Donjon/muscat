@@ -1,21 +1,15 @@
 use crate::{
     util::{argmax_by, argsort_by, max_per_row},
-    Error,
+    Error, Sample,
 };
-use ndarray::{s, Array1, Array2, ArrayView1, ArrayView2, Axis};
-use num_traits::{AsPrimitive, Zero};
+use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
+use num_traits::AsPrimitive;
 use rayon::{
     iter::ParallelBridge,
     prelude::{IntoParallelIterator, ParallelIterator},
 };
 use serde::{Deserialize, Serialize};
-use std::{
-    fmt::Debug,
-    fs::File,
-    iter::zip,
-    ops::{Add, AddAssign, Mul},
-    path::Path,
-};
+use std::{fmt::Debug, fs::File, iter::zip, ops::Add, path::Path};
 
 /// Result of the CPA[^1] on some traces.
 ///
@@ -97,8 +91,8 @@ pub fn cpa<T, P, F>(
     batch_size: usize,
 ) -> Cpa
 where
-    T: Containable + Copy + Sync,
-    <T as Containable>::Container: Send + Sync,
+    T: Sample + Copy + Sync,
+    <T as Sample>::Container: Send + Sync,
     P: Into<usize> + Copy + Sync,
     F: Fn(usize, usize) -> usize + Send + Sync + Copy,
 {
@@ -138,36 +132,36 @@ where
 #[derive(Serialize, Deserialize)]
 pub struct CpaProcessor<T>
 where
-    T: Containable,
+    T: Sample,
 {
     /// Number of samples per trace
     num_samples: usize,
     /// Guess range upper excluded bound
     guess_range: usize,
     /// Sum of traces
-    #[serde(bound(serialize = "<T as Containable>::Container: Serialize"))]
-    #[serde(bound(deserialize = "<T as Containable>::Container: Deserialize<'de>"))]
-    sum_traces: Array1<<T as Containable>::Container>,
+    #[serde(bound(serialize = "<T as Sample>::Container: Serialize"))]
+    #[serde(bound(deserialize = "<T as Sample>::Container: Deserialize<'de>"))]
+    sum_traces: Array1<<T as Sample>::Container>,
     /// Sum of square of traces
-    #[serde(bound(serialize = "<T as Containable>::Container: Serialize"))]
-    #[serde(bound(deserialize = "<T as Containable>::Container: Deserialize<'de>"))]
-    sum_square_traces: Array1<<T as Containable>::Container>,
+    #[serde(bound(serialize = "<T as Sample>::Container: Serialize"))]
+    #[serde(bound(deserialize = "<T as Sample>::Container: Deserialize<'de>"))]
+    sum_square_traces: Array1<<T as Sample>::Container>,
     /// Sum of traces per key guess
     guess_sum_traces: Array1<usize>,
     /// Sum of square of traces per key guess
     guess_sum_squares_traces: Array1<usize>,
     /// Sum of traces per plaintext used
     /// See 4.3 in <https://eprint.iacr.org/2013/794.pdf>
-    #[serde(bound(serialize = "<T as Containable>::Container: Serialize"))]
-    #[serde(bound(deserialize = "<T as Containable>::Container: Deserialize<'de>"))]
-    plaintext_sum_traces: Array2<<T as Containable>::Container>,
+    #[serde(bound(serialize = "<T as Sample>::Container: Serialize"))]
+    #[serde(bound(deserialize = "<T as Sample>::Container: Deserialize<'de>"))]
+    plaintext_sum_traces: Array2<<T as Sample>::Container>,
     /// Number of traces processed
     num_traces: usize,
 }
 
 impl<T> CpaProcessor<T>
 where
-    T: Containable,
+    T: Sample,
 {
     pub fn new(num_samples: usize, guess_range: usize) -> Self {
         Self {
@@ -192,8 +186,8 @@ where
 
 impl<T> CpaProcessor<T>
 where
-    T: Containable + Copy,
-    <T as Containable>::Container: Sync,
+    T: Sample + Copy,
+    <T as Sample>::Container: Sync,
 {
     /// # Panics
     /// Panic in debug if `trace.shape()[0] != self.num_samples`.
@@ -233,7 +227,7 @@ where
         let mut corr = Array2::zeros((self.guess_range, self.num_samples));
         for guess in 0..self.guess_range {
             for u in 0..self.guess_range {
-                modeled_leakages[u] = leakage_model(u, guess);
+                modeled_leakages[u] = leakage_model(u, guess) as f32;
             }
 
             let mean_key = self.guess_sum_traces[guess] as f32 / self.num_traces as f32;
@@ -244,20 +238,18 @@ where
             let guess_corr: Vec<_> = (0..self.num_samples)
                 .into_par_iter()
                 .map(|u| {
-                    let mean_traces: f32 =
-                        <_ as AsPrimitive<f32>>::as_(self.sum_traces[u]) / self.num_traces as f32;
+                    let mean_traces = self.sum_traces[u].as_() / self.num_traces as f32;
 
                     let cov = self
                         .plaintext_sum_traces
-                        .slice(s![.., u])
+                        .column(u)
                         .mapv(|x| x.as_())
                         .dot(&modeled_leakages.view());
-                    let cov = cov as f32 / self.num_traces as f32 - (mean_key * mean_traces);
+                    let cov = cov / self.num_traces as f32 - (mean_key * mean_traces);
 
                     let mean_squares_traces =
-                        <_ as AsPrimitive<f32>>::as_(self.sum_square_traces[u])
-                            / self.num_traces as f32;
-                    let var_traces: f32 = mean_squares_traces - (mean_traces * mean_traces);
+                        self.sum_square_traces[u].as_() / self.num_traces as f32;
+                    let var_traces = mean_squares_traces - (mean_traces * mean_traces);
                     f32::abs(cov / f32::sqrt(var_key * var_traces))
                 })
                 .collect();
@@ -274,8 +266,8 @@ where
 
 impl<T> CpaProcessor<T>
 where
-    T: Containable + Serialize,
-    <T as Containable>::Container: Serialize,
+    T: Sample + Serialize,
+    <T as Sample>::Container: Serialize,
 {
     /// Save the [`CpaProcessor`] to a file.
     ///
@@ -292,8 +284,8 @@ where
 
 impl<T> CpaProcessor<T>
 where
-    T: Containable + for<'de> Deserialize<'de>,
-    <T as Containable>::Container: for<'de> Deserialize<'de>,
+    T: Sample + for<'de> Deserialize<'de>,
+    <T as Sample>::Container: for<'de> Deserialize<'de>,
 {
     /// Load a [`CpaProcessor`] from a file.
     ///
@@ -310,7 +302,7 @@ where
 
 impl<T> Add for CpaProcessor<T>
 where
-    T: Containable + Copy,
+    T: Sample + Copy,
 {
     type Output = Self;
 
@@ -335,41 +327,6 @@ where
         }
     }
 }
-
-/// This trait provide a bigger container type to computations with [`Self`] types.
-///
-/// In `muscat`, this is used, for instance, to hold sums of millions of elements that could
-/// otherwise overflow if summing [`Self`] types.
-///
-/// # Dyn compatibility
-/// This trait is not [dyn compatible](https://doc.rust-lang.org/nightly/reference/items/traits.html#dyn-compatibility).
-///
-/// # Limitations
-/// We are assuming that the sum of [`Container`] types will not overflow.
-pub trait Containable: Sized {
-    type Container: Zero
-        + Add
-        + AddAssign
-        + Mul<Output = Self::Container>
-        + AsPrimitive<f32>
-        + AsPrimitive<usize>
-        + Clone
-        + Copy
-        + From<Self>;
-}
-
-macro_rules! impl_containable {
-    ($($t:ty),* => $c:ty) => {
-        $(
-            impl Containable for $t {
-                type Container = $c;
-            }
-        )*
-    };
-}
-
-impl_containable! { u8, u16, u32, u64 => u64 }
-impl_containable! { i8, i16, i32, i64 => i64 }
 
 #[cfg(test)]
 mod tests {

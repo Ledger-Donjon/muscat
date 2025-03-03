@@ -1,18 +1,12 @@
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
-use num_traits::{AsPrimitive, Zero};
+use num_traits::AsPrimitive;
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use serde::{Deserialize, Serialize};
-use std::{
-    fs::File,
-    iter::zip,
-    marker::PhantomData,
-    ops::{Add, AddAssign},
-    path::Path,
-};
+use std::{fs::File, iter::zip, marker::PhantomData, ops::Add, path::Path};
 
 use crate::{
     util::{argmax_by, argsort_by, max_per_row},
-    Error,
+    Error, Sample,
 };
 
 /// Compute the [`Dpa`] of the given traces using [`DpaProcessor`].
@@ -71,8 +65,8 @@ pub fn dpa<T, M, F>(
     batch_size: usize,
 ) -> Dpa
 where
-    T: Containable + Copy + Sync,
-    <T as Containable>::Container: Send,
+    T: Sample + Copy + Sync,
+    <T as Sample>::Container: Send,
     M: Clone + Send + Sync,
     F: Fn(M, usize) -> bool + Send + Sync + Copy,
 {
@@ -141,20 +135,20 @@ impl Dpa {
 #[derive(Serialize, Deserialize)]
 pub struct DpaProcessor<T, M>
 where
-    T: Containable,
+    T: Sample,
 {
     /// Number of samples per trace
     num_samples: usize,
     /// Guess range upper excluded bound
     guess_range: usize,
     /// Sum of traces for which the selection function equals false
-    #[serde(bound(serialize = "<T as Containable>::Container: Serialize"))]
-    #[serde(bound(deserialize = "<T as Containable>::Container: Deserialize<'de>"))]
-    sum_0: Array2<<T as Containable>::Container>,
+    #[serde(bound(serialize = "<T as Sample>::Container: Serialize"))]
+    #[serde(bound(deserialize = "<T as Sample>::Container: Deserialize<'de>"))]
+    sum_0: Array2<<T as Sample>::Container>,
     /// Sum of traces for which the selection function equals true
-    #[serde(bound(serialize = "<T as Containable>::Container: Serialize"))]
-    #[serde(bound(deserialize = "<T as Containable>::Container: Deserialize<'de>"))]
-    sum_1: Array2<<T as Containable>::Container>,
+    #[serde(bound(serialize = "<T as Sample>::Container: Serialize"))]
+    #[serde(bound(deserialize = "<T as Sample>::Container: Deserialize<'de>"))]
+    sum_1: Array2<<T as Sample>::Container>,
     /// Number of traces processed for which the selection function equals false
     count_0: Array1<usize>,
     /// Number of traces processed for which the selection function equals true
@@ -166,7 +160,7 @@ where
 
 impl<T, M> DpaProcessor<T, M>
 where
-    T: Containable + Copy,
+    T: Sample + Copy,
     M: Clone,
 {
     pub fn new(num_samples: usize, guess_range: usize) -> Self {
@@ -234,8 +228,8 @@ where
 
 impl<T, M> DpaProcessor<T, M>
 where
-    T: Containable + Serialize,
-    <T as Containable>::Container: Serialize,
+    T: Sample + Serialize,
+    <T as Sample>::Container: Serialize,
 {
     /// Save the [`DpaProcessor`] to a file.
     ///
@@ -252,8 +246,8 @@ where
 
 impl<T, M> DpaProcessor<T, M>
 where
-    T: Containable + for<'de> Deserialize<'de>,
-    <T as Containable>::Container: for<'de> Deserialize<'de>,
+    T: Sample + for<'de> Deserialize<'de>,
+    <T as Sample>::Container: for<'de> Deserialize<'de>,
 {
     /// Load a [`DpaProcessor`] from a file.
     ///
@@ -270,7 +264,7 @@ where
 
 impl<T, M> Add for DpaProcessor<T, M>
 where
-    T: Containable + Copy,
+    T: Sample + Copy,
     M: Clone,
 {
     type Output = Self;
@@ -296,34 +290,6 @@ where
         }
     }
 }
-
-/// This trait provide a bigger container type to computations with [`Self`] types.
-///
-/// In `muscat`, this is used, for instance, to hold sums of millions of elements that could
-/// otherwise overflow if summing [`Self`] types.
-///
-/// # Dyn compatibility
-/// This trait is not [dyn compatible](https://doc.rust-lang.org/nightly/reference/items/traits.html#dyn-compatibility).
-///
-/// # Limitations
-/// We are assuming that the sum of [`Container`] types will not overflow.
-pub trait Containable: Sized {
-    type Container: Zero + AddAssign + AsPrimitive<f32> + Clone + Copy + From<Self>;
-}
-
-macro_rules! impl_containable {
-    ($($t:ty),* => $c:ty) => {
-        $(
-            impl Containable for $t {
-                type Container = $c;
-            }
-        )*
-    };
-}
-
-impl_containable! { u8, u16, u32, u64 => u64 }
-impl_containable! { i8, i16, i32, i64 => i64 }
-impl_containable! { f32 => f32 }
 
 #[cfg(test)]
 mod tests {

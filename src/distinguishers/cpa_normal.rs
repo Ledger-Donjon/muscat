@@ -1,15 +1,10 @@
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
-use num_traits::{AsPrimitive, Zero};
+use num_traits::AsPrimitive;
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use serde::{Deserialize, Serialize};
-use std::{
-    fs::File,
-    iter::zip,
-    ops::{Add, AddAssign, Mul},
-    path::Path,
-};
+use std::{fs::File, iter::zip, ops::Add, path::Path};
 
-use crate::{distinguishers::cpa::Cpa, Error};
+use crate::{distinguishers::cpa::Cpa, Error, Sample};
 
 /// Compute the [`Cpa`] of the given traces using [`CpaProcessor`].
 ///
@@ -57,8 +52,8 @@ pub fn cpa<T, P, F>(
     batch_size: usize,
 ) -> Cpa
 where
-    T: Containable + Copy + Sync,
-    <T as Containable>::Container: Send,
+    T: Sample + Copy + Sync,
+    <T as Sample>::Container: Send,
     P: Into<usize> + Copy + Sync,
     F: Fn(ArrayView1<usize>, usize) -> usize + Send + Sync + Copy,
 {
@@ -89,20 +84,20 @@ where
 #[derive(Serialize, Deserialize)]
 pub struct CpaProcessor<T>
 where
-    T: Containable,
+    T: Sample,
 {
     /// Number of samples per trace
     num_samples: usize,
     /// Guess range upper excluded bound
     guess_range: usize,
     /// Sum of traces
-    #[serde(bound(serialize = "<T as Containable>::Container: Serialize"))]
-    #[serde(bound(deserialize = "<T as Containable>::Container: Deserialize<'de>"))]
-    sum_traces: Array1<<T as Containable>::Container>,
+    #[serde(bound(serialize = "<T as Sample>::Container: Serialize"))]
+    #[serde(bound(deserialize = "<T as Sample>::Container: Deserialize<'de>"))]
+    sum_traces: Array1<<T as Sample>::Container>,
     /// Sum of square of traces
-    #[serde(bound(serialize = "<T as Containable>::Container: Serialize"))]
-    #[serde(bound(deserialize = "<T as Containable>::Container: Deserialize<'de>"))]
-    sum_traces2: Array1<<T as Containable>::Container>,
+    #[serde(bound(serialize = "<T as Sample>::Container: Serialize"))]
+    #[serde(bound(deserialize = "<T as Sample>::Container: Deserialize<'de>"))]
+    sum_traces2: Array1<<T as Sample>::Container>,
     /// Sum of traces per key guess
     guess_sum_traces: Array1<f32>,
     /// Sum of square of traces per key guess
@@ -117,7 +112,7 @@ where
 
 impl<T> CpaProcessor<T>
 where
-    T: Containable + Copy,
+    T: Sample + Copy,
 {
     pub fn new(num_samples: usize, batch_size: usize, guess_range: usize) -> Self {
         Self {
@@ -165,17 +160,17 @@ where
             + self
                 .values
                 .t()
-                .dot(&trace_batch.mapv(|x| <T as Containable>::Container::from(x).as_()));
+                .dot(&trace_batch.mapv(|x| <T as Sample>::Container::from(x).as_()));
 
         // Update key leakages
         for i in 0..self.num_samples {
             self.sum_traces[i] += trace_batch
                 .column(i)
-                .mapv(|x| <T as Containable>::Container::from(x))
+                .mapv(|x| <T as Sample>::Container::from(x))
                 .sum(); // trace[i] as usize;
             self.sum_traces2[i] += trace_batch
                 .column(i)
-                .mapv(|x| <T as Containable>::Container::from(x))
+                .mapv(|x| <T as Sample>::Container::from(x))
                 .mapv(|x| x * x)
                 .sum();
             // (trace[i] * trace[i]) as usize;
@@ -228,8 +223,8 @@ where
 
 impl<T> CpaProcessor<T>
 where
-    T: Containable + Serialize,
-    <T as Containable>::Container: Serialize,
+    T: Sample + Serialize,
+    <T as Sample>::Container: Serialize,
 {
     /// Save the [`CpaProcessor`] to a file.
     ///
@@ -246,8 +241,8 @@ where
 
 impl<T> CpaProcessor<T>
 where
-    T: Containable + for<'de> Deserialize<'de>,
-    <T as Containable>::Container: for<'de> Deserialize<'de>,
+    T: Sample + for<'de> Deserialize<'de>,
+    <T as Sample>::Container: for<'de> Deserialize<'de>,
 {
     /// Load a [`CpaProcessor`] from a file.
     ///
@@ -264,7 +259,7 @@ where
 
 impl<T> Add for CpaProcessor<T>
 where
-    T: Containable + Copy,
+    T: Sample + Copy,
 {
     type Output = Self;
 
@@ -291,39 +286,6 @@ where
         }
     }
 }
-
-/// This trait provide a bigger container type to computations with [`Self`] types.
-///
-/// In `muscat`, this is used, for instance, to hold sums of millions of elements that could
-/// otherwise overflow if summing [`Self`] types.
-///
-/// # Dyn compatibility
-/// This trait is not [dyn compatible](https://doc.rust-lang.org/nightly/reference/items/traits.html#dyn-compatibility).
-///
-/// # Limitations
-/// We are assuming that the sum of [`Container`] types will not overflow.
-pub trait Containable: Sized {
-    type Container: Zero
-        + AddAssign
-        + Mul<Output = Self::Container>
-        + AsPrimitive<f32>
-        + Clone
-        + From<Self>;
-}
-
-macro_rules! impl_containable {
-    ($($t:ty),* => $c:ty) => {
-        $(
-            impl Containable for $t {
-                type Container = $c;
-            }
-        )*
-    };
-}
-
-impl_containable! { u8, u16, u32, u64 => u64 }
-impl_containable! { i8, i16, i32, i64 => i64 }
-impl_containable! { f32 => f32 }
 
 #[cfg(test)]
 mod tests {
