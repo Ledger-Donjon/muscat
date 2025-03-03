@@ -33,7 +33,7 @@ fn main() {
     let best_guess = dpa.best_guess();
     println!("Best subkey guess: {:?}", best_guess);
 
-    // // Let's plot correlation coefficients of the best guess
+    // Let's plot correlation coefficients of the best guess
     let differential_curves = dpa.differential_curves();
     let differential_curve = differential_curves.row(best_guess);
 

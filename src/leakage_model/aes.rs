@@ -47,6 +47,10 @@ pub fn sbox(index: u8) -> u8 {
     SBOX[index as usize]
 }
 
+pub fn inv_sbox(index: u8) -> u8 {
+    INV_SBOX[index as usize]
+}
+
 /// Expand a 128-bit AES key into round keys.
 pub fn expand_key(key: &[u8; 16], round_keys: &mut [[u8; 16]; 11]) {
     const RCON: [u8; 10] = [0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36];
