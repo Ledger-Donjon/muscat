@@ -12,7 +12,7 @@ pub fn compute_snr<'py>(
     classes: usize,
     get_class: &Bound<'py, PyFunction>,
     batch_size: usize,
-) -> Bound<'py, PyArray1<f64>> {
+) -> Bound<'py, PyArray1<f32>> {
     let mut leakages_class = Array1::zeros(leakages.readonly().as_array().len());
     for i in 0..leakages_class.len() {
         leakages_class[i] = get_class
@@ -36,7 +36,7 @@ pub fn compute_ttest<'py>(
     traces: &Bound<'py, PyArray2<i64>>,
     trace_classes: &Bound<'py, PyArray1<bool>>,
     batch_size: usize,
-) -> Bound<'py, PyArray1<f64>> {
+) -> Bound<'py, PyArray1<f32>> {
     muscat::leakage_detection::ttest(
         traces.readonly().as_array(),
         trace_classes.readonly().as_array(),

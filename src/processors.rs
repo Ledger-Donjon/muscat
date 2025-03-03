@@ -1,20 +1,33 @@
 //! Traces processing algorithms
 use ndarray::{Array1, ArrayView1};
+use num_traits::AsPrimitive;
 use serde::{Deserialize, Serialize};
 use std::{iter::zip, ops::Add};
 
+use crate::Sample;
+
 /// Processes traces to calculate mean and variance.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MeanVar {
+#[derive(Serialize, Deserialize)]
+pub struct MeanVar<T>
+where
+    T: Sample,
+{
     /// Sum of traces
-    sum: Array1<i64>,
+    #[serde(bound(serialize = "<T as Sample>::Container: Serialize"))]
+    #[serde(bound(deserialize = "<T as Sample>::Container: Deserialize<'de>"))]
+    sum: Array1<<T as Sample>::Container>,
     /// Sum of square of traces
-    sum_squares: Array1<i64>,
+    #[serde(bound(serialize = "<T as Sample>::Container: Serialize"))]
+    #[serde(bound(deserialize = "<T as Sample>::Container: Deserialize<'de>"))]
+    sum_squares: Array1<<T as Sample>::Container>,
     /// Number of traces processed
     count: usize,
 }
 
-impl MeanVar {
+impl<T> MeanVar<T>
+where
+    T: Sample + Copy,
+{
     /// Creates a new mean and variance processor.
     ///
     /// # Arguments
@@ -32,7 +45,7 @@ impl MeanVar {
     ///
     /// # Panics
     /// Panics in debug if the length of the trace is different form the size of [`MeanVar`].
-    pub fn process<T: Into<i64> + Copy>(&mut self, trace: ArrayView1<T>) {
+    pub fn process(&mut self, trace: ArrayView1<T>) {
         debug_assert!(trace.len() == self.size());
 
         for i in 0..self.sum.len() {
@@ -46,18 +59,16 @@ impl MeanVar {
     }
 
     /// Returns trace mean.
-    pub fn mean(&self) -> Array1<f64> {
-        let count = self.count as f64;
-
-        self.sum.mapv(|x| x as f64 / count)
+    pub fn mean(&self) -> Array1<f32> {
+        self.sum.mapv(|x| x.as_() / self.count as f32)
     }
 
     /// Calculates and returns traces variance.
-    pub fn var(&self) -> Array1<f64> {
-        let count = self.count as f64;
+    pub fn var(&self) -> Array1<f32> {
+        let count = self.count as f32;
 
         zip(self.sum.iter(), self.sum_squares.iter())
-            .map(|(&sum, &sum_squares)| (sum_squares as f64 / count) - (sum as f64 / count).powi(2))
+            .map(|(&sum, &sum_squares)| (sum_squares.as_() / count) - (sum.as_() / count).powi(2))
             .collect()
     }
 
@@ -79,7 +90,10 @@ impl MeanVar {
     }
 }
 
-impl Add for MeanVar {
+impl<T> Add for MeanVar<T>
+where
+    T: Sample + Copy,
+{
     type Output = Self;
 
     /// Merge computations of two [`MeanVar`]. Processors need to be compatible to be merged
@@ -110,19 +124,19 @@ mod tests {
         processor.process(array![28038i16, 22066i16, -20614i16, -9763i16].view());
         assert_eq!(
             processor.mean(),
-            array![28038f64, 22066f64, -20614f64, -9763f64]
+            array![28038f32, 22066f32, -20614f32, -9763f32]
         );
-        assert_eq!(processor.var(), array![0f64, 0f64, 0f64, 0f64]);
+        assert_eq!(processor.var(), array![0f32, 0f32, 0f32, 0f32]);
         processor.process(array![31377, -6950, -15666, 26773].view());
         processor.process(array![24737, -18311, 24742, 17207].view());
         processor.process(array![12974, -29255, -28798, 18988].view());
         assert_eq!(
             processor.mean(),
-            array![24281.5f64, -8112.5f64, -10084f64, 13301.25f64]
+            array![24281.5f32, -8112.5f32, -10084f32, 13301.25f32]
         );
         assert_eq!(
             processor.var(),
-            array![48131112.25, 365776994.25, 426275924.0, 190260421.1875]
+            array![48131136.0, 365777020.0, 426275900.0, 190260430.0]
         );
     }
 }
