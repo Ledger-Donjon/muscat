@@ -23,7 +23,7 @@ Homepage = "https://github.com/Ledger-Donjon/muscat"
 # Documentation = ""
 Repository = "https://github.com/Ledger-Donjon/muscat.git"
 Issues = "https://github.com/Ledger-Donjon/muscat/issues"
-Changelog = "https://github.com/Ledger-Donjon/muscat/blob/master/CHANGELOG.md"
+Changelog = "https://github.com/Ledger-Donjon/muscat/blob/master/muscatpy/CHANGELOG.md"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
