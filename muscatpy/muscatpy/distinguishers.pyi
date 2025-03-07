@@ -1,10 +1,23 @@
 from collections.abc import Callable
+from typing import Union
 
 import numpy as np
 import numpy.typing as npt
 
+Trace = Union[
+    npt.NDArray[np.uint8],
+    npt.NDArray[np.uint16],
+    npt.NDArray[np.uint32],
+    npt.NDArray[np.uint64],
+    npt.NDArray[np.int8],
+    npt.NDArray[np.int16],
+    npt.NDArray[np.int32],
+    npt.NDArray[np.int64],
+    npt.NDArray[np.float32],
+]
+
 def compute_cpa(
-    traces: npt.NDArray,
+    traces: Trace,
     plaintexts: npt.NDArray[np.uint64],
     guess_range: int,
     target_byte: int,
@@ -14,7 +27,7 @@ def compute_cpa(
     """Compute the [`Cpa`] of the given traces."""
 
 def compute_cpa_normal(
-    traces: npt.NDArray,
+    traces: Trace,
     plaintexts: npt.NDArray[np.uint64],
     guess_range: int,
     target_byte: int,
@@ -42,7 +55,7 @@ class Cpa:
         """Return the maximum Pearson correlation coefficient for each guess."""
 
 def compute_dpa(
-    traces: npt.NDArray,
+    traces: Trace,
     plaintexts: npt.NDArray[np.uint64],
     guess_range: int,
     selection_function: Callable[[int, int], bool],
