@@ -20,6 +20,8 @@ jobs:
       run: cargo fmt --check
     - name: Lint
       run: cargo clippy -- -Dwarnings
+    - name: Check that benchmarks compile
+      run: cargo bench --no-run
 
   muscatpy:
     runs-on: ubuntu-latest
