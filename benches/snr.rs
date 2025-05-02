@@ -5,7 +5,7 @@ use ndarray_rand::RandomExt;
 use ndarray_rand::rand::{SeedableRng, rngs::StdRng};
 use ndarray_rand::rand_distr::Uniform;
 
-fn snr_sequential(traces: &Array2<i64>, plaintexts: &Array2<u8>) -> Array1<f64> {
+fn snr_sequential(traces: &Array2<i64>, plaintexts: &Array2<u8>) -> Array1<f32> {
     let mut snr = SnrProcessor::new(traces.shape()[1], 256);
 
     for i in 0..traces.shape()[0] {
@@ -15,7 +15,7 @@ fn snr_sequential(traces: &Array2<i64>, plaintexts: &Array2<u8>) -> Array1<f64> 
     snr.snr()
 }
 
-fn snr_parallel(traces: &Array2<i64>, plaintexts: &Array2<u8>) -> Array1<f64> {
+fn snr_parallel(traces: &Array2<i64>, plaintexts: &Array2<u8>) -> Array1<f32> {
     snr(traces.view(), 256, |i| plaintexts.row(i)[0].into(), 500)
 }
 

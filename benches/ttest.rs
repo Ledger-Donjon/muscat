@@ -5,7 +5,7 @@ use ndarray_rand::RandomExt;
 use ndarray_rand::rand::{SeedableRng, rngs::StdRng};
 use ndarray_rand::rand_distr::{Standard, Uniform};
 
-fn ttest_sequential(traces: &Array2<i64>, trace_classes: &Array1<bool>) -> Array1<f64> {
+fn ttest_sequential(traces: &Array2<i64>, trace_classes: &Array1<bool>) -> Array1<f32> {
     let mut ttest = TTestProcessor::new(traces.shape()[1]);
 
     for i in 0..traces.shape()[0] {
@@ -15,7 +15,7 @@ fn ttest_sequential(traces: &Array2<i64>, trace_classes: &Array1<bool>) -> Array
     ttest.ttest()
 }
 
-fn ttest_parallel(traces: &Array2<i64>, trace_classes: &Array1<bool>) -> Array1<f64> {
+fn ttest_parallel(traces: &Array2<i64>, trace_classes: &Array1<bool>) -> Array1<f32> {
     ttest(traces.view(), trace_classes.view(), 500)
 }
 
