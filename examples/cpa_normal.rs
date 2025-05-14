@@ -1,20 +1,22 @@
-use std::{env, iter::zip, path::PathBuf};
-
+use anyhow::{Context, Result};
 use gnuplot::{Figure, PlotOption::Caption};
 use muscat::{distinguishers::cpa_normal::CpaProcessor, leakage_model::aes::sbox};
 use ndarray::{Array2, ArrayView1, Axis};
 use ndarray_npy::read_npy;
+use std::{env, iter::zip, path::PathBuf};
 
 fn leakage_model(plaintext: ArrayView1<usize>, guess: usize) -> usize {
     sbox((plaintext[0] ^ guess) as u8) as usize
 }
 
-fn main() {
+fn main() -> Result<()> {
     let traces_dir =
-        PathBuf::from(env::var("TRACES_DIR").expect("Missing TRACES_DIR environment variable"));
+        PathBuf::from(env::var("TRACES_DIR").context("Missing TRACES_DIR environment variable")?);
 
-    let traces: Array2<f64> = read_npy(traces_dir.join("traces.npy")).unwrap();
-    let plaintexts: Array2<u8> = read_npy(traces_dir.join("plaintexts.npy")).unwrap();
+    let traces: Array2<f64> =
+        read_npy(traces_dir.join("traces.npy")).context("Failed to read traces.npy")?;
+    let plaintexts: Array2<u8> =
+        read_npy(traces_dir.join("plaintexts.npy")).context("Failed to read plaintexts.npy")?;
     assert_eq!(traces.shape()[0], plaintexts.shape()[0]);
 
     // Let's recover the first byte of the key
@@ -46,5 +48,7 @@ fn main() {
         corr_best_guess,
         &[Caption("Pearson correlation coefficient")],
     );
-    fg.show().unwrap();
+    fg.show()?;
+
+    Ok(())
 }

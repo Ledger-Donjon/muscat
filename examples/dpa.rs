@@ -1,20 +1,22 @@
-use std::{env, iter::zip, path::PathBuf};
-
+use anyhow::{Context, Result};
 use gnuplot::{Figure, PlotOption::Caption};
 use muscat::{distinguishers::dpa::DpaProcessor, leakage_model::aes::sbox};
 use ndarray::Array2;
 use ndarray_npy::read_npy;
+use std::{env, iter::zip, path::PathBuf};
 
 fn selection_function(plaintext_byte: u8, guess: usize) -> bool {
     sbox(plaintext_byte ^ guess as u8) & 1 == 1
 }
 
-fn main() {
+fn main() -> Result<()> {
     let traces_dir =
-        PathBuf::from(env::var("TRACES_DIR").expect("Missing TRACES_DIR environment variable"));
+        PathBuf::from(env::var("TRACES_DIR").context("Missing TRACES_DIR environment variable")?);
 
-    let traces: Array2<f64> = read_npy(traces_dir.join("traces.npy")).unwrap();
-    let plaintexts: Array2<u8> = read_npy(traces_dir.join("plaintexts.npy")).unwrap();
+    let traces: Array2<f64> =
+        read_npy(traces_dir.join("traces.npy")).context("Failed to read traces.npy")?;
+    let plaintexts: Array2<u8> =
+        read_npy(traces_dir.join("plaintexts.npy")).context("Failed to read plaintexts.npy")?;
     assert_eq!(traces.shape()[0], plaintexts.shape()[0]);
 
     // Let's recover the first byte of the key
@@ -43,5 +45,7 @@ fn main() {
         differential_curve,
         &[Caption("Differential curve")],
     );
-    fg.show().unwrap();
+    fg.show()?;
+
+    Ok(())
 }

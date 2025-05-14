@@ -30,8 +30,8 @@ serde = { version = "1.0.214", features = ["derive"] }
 [dev-dependencies]
 criterion = "0.5.1"
 ndarray-rand = "0.15.0"
-anyhow = "1.0.92"
 gnuplot = "0.0.45"
+anyhow = "1.0.98"
 
 [[example]]
 name = "cpa"
