@@ -41,7 +41,6 @@ name = "cpa_normal"
 
 [[example]]
 name = "dpa"
-required-features = []
 
 [[example]]
 name = "rank"
@@ -49,7 +48,6 @@ required-features = ["progress_bar"]
 
 [[example]]
 name = "snr"
-required-features = ["progress_bar", "quicklog"]
 
 [[bench]]
 name = "cpa"

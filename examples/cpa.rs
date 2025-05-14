@@ -1,9 +1,8 @@
-use std::{env, iter::zip, path::PathBuf};
-
 use gnuplot::{Figure, PlotOption::Caption};
 use muscat::{distinguishers::cpa::CpaProcessor, leakage_model::aes::sbox};
 use ndarray::Array2;
 use ndarray_npy::read_npy;
+use std::{env, iter::zip, path::PathBuf};
 
 fn leakage_model(plaintext_byte: usize, guess: usize) -> usize {
     sbox((plaintext_byte ^ guess) as u8) as usize

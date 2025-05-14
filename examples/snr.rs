@@ -1,45 +1,30 @@
-use anyhow::Result;
-use indicatif::ProgressIterator;
+use gnuplot::{Figure, PlotOption::Caption};
 use muscat::leakage_detection::SnrProcessor;
-use muscat::quicklog::{BatchIter, Log};
-use muscat::util::progress_bar;
-use ndarray_npy::write_npy;
-use rayon::prelude::{ParallelBridge, ParallelIterator};
+use ndarray::Array2;
+use ndarray_npy::read_npy;
+use std::{env, iter::zip, path::PathBuf};
 
-fn main() -> Result<()> {
-    // Open log file
-    // This uses logs from the python quicklog library.
-    let log = Log::<i16>::new("log")?;
-    let leakage_size = log.leakage_size();
-    let trace_count = log.len();
+fn main() {
+    let traces_dir =
+        PathBuf::from(env::var("TRACES_DIR").expect("Missing TRACES_DIR environment variable"));
 
-    let result: SnrProcessor = log
-        .into_iter()
-        .progress_with(progress_bar(trace_count))
-        // Process records sharing same leakage numpy files by batches, so batch files get read only
-        // once.
-        // Log entries may have lots of information. The closure argument here extracts the data
-        // required for the analysis, in this case the first byte of an hexadecimal string in the
-        // "data" column of the record.
-        .batches(|record| record.bytes("data")[0])
-        // Use `par_bridge` from rayon crate to make processing multithreaded
-        .par_bridge()
-        .fold(
-            || SnrProcessor::new(leakage_size, 256),
-            |mut snr, batch| {
-                for trace in batch {
-                    // `process` takes an `ArrayView1` argument, which makes possible to pass a
-                    // trace slice: `traces.leakage.slice(s![100..])` for instance.
-                    snr.process(trace.leakage.view(), trace.value as usize)
-                }
-                snr
-            },
-        )
-        // Merge the results of each processing thread
-        .reduce(|| SnrProcessor::new(leakage_size, 256), |a, b| a + b);
+    let traces: Array2<f64> = read_npy(traces_dir.join("traces.npy")).unwrap();
+    let plaintexts: Array2<u8> = read_npy(traces_dir.join("plaintexts.npy")).unwrap();
+    assert_eq!(traces.shape()[0], plaintexts.shape()[0]);
 
-    // Save the resulting SNR trace to a numpy file
-    write_npy("result.npy", &result.snr())?;
+    // Let's find the leakage of P[0]
+    let mut processor = SnrProcessor::new(traces.shape()[1], 256);
+    for (trace, plaintext) in zip(traces.rows(), plaintexts.rows()) {
+        processor.process(
+            // Convert chipwhisperer float to int
+            trace.mapv(|x| ((x + 1.) * 1024.) as u16).view(),
+            plaintext[0].into(),
+        );
+    }
 
-    Ok(())
+    let snr = processor.snr();
+
+    let mut fg = Figure::new();
+    fg.axes2d().lines(0..snr.len(), snr, &[Caption("SNR")]);
+    fg.show().unwrap();
 }
