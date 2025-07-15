@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
 use gnuplot::{Figure, PlotOption::Caption};
-use muscat::{distinguishers::dpa::DpaProcessor, leakage_model::aes::sbox};
+use muscat::{
+    distinguishers::dpa::DpaProcessor, leakage_model::aes::sbox, util::chipwhisperer_float_to_u16,
+};
 use ndarray::Array2;
 use ndarray_npy::read_npy;
 use std::{env, iter::zip, path::PathBuf};
@@ -23,8 +25,7 @@ fn main() -> Result<()> {
     let mut processor = DpaProcessor::new(traces.shape()[1], 256);
     for (trace, plaintext) in zip(traces.rows(), plaintexts.rows()) {
         processor.update(
-            // Convert chipwhisperer float to int
-            trace.mapv(|x| ((x + 1.) * 1024.) as u16).view(),
+            trace.mapv(chipwhisperer_float_to_u16).view(),
             plaintext[0],
             selection_function,
         );

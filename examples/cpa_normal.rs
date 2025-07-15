@@ -1,6 +1,9 @@
 use anyhow::{Context, Result};
 use gnuplot::{Figure, PlotOption::Caption};
-use muscat::{distinguishers::cpa_normal::CpaProcessor, leakage_model::aes::sbox};
+use muscat::{
+    distinguishers::cpa_normal::CpaProcessor, leakage_model::aes::sbox,
+    util::chipwhisperer_float_to_u16,
+};
 use ndarray::{Array2, ArrayView1, Axis};
 use ndarray_npy::read_npy;
 use std::{env, iter::zip, path::PathBuf};
@@ -26,8 +29,7 @@ fn main() -> Result<()> {
         plaintexts.axis_chunks_iter(Axis(0), 100),
     ) {
         processor.update(
-            // Convert chipwhisperer float to int
-            trace_batch.mapv(|x| ((x + 1.) * 1024.) as u16).view(),
+            trace_batch.mapv(chipwhisperer_float_to_u16).view(),
             plaintext_batch,
             leakage_model,
         );
