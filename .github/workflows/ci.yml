@@ -15,30 +15,50 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+
+    - name: Setup Rust toolchain
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+
     - name: Build
       run: cargo build --verbose
+
     - name: Run tests
       run: cargo test --verbose
+
     - name: Check formatting
       run: cargo fmt --check
-    - name: Lint
+
+    - name: Lint with Clippy
       run: cargo clippy -- -Dwarnings
-    - name: Check that benchmarks compile
+
+    - name: Build examples
+      run: cargo build --examples
+
+    - name: Build benchmarks
       run: cargo bench --no-run
 
   muscatpy:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+
+    - name: Setup Rust caching
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: "muscatpy -> target"
+
     - uses: actions/setup-python@v5
       with:
-        python-version: '3.10'
+        python-version: "3.10"
+
     - name: Build wheels
       uses: PyO3/maturin-action@v1
       with:
         command: build
         args: --manifest-path muscatpy/Cargo.toml --release
+
     - name: Check formatting
       run: cargo fmt --manifest-path muscatpy/Cargo.toml --check
-    - name: Lint
+
+    - name: Lint with Clippy
       run: cargo clippy --manifest-path muscatpy/Cargo.toml -- -Dwarnings
