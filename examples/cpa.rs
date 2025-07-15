@@ -34,7 +34,7 @@ fn main() -> Result<()> {
     let cpa = processor.finalize(leakage_model);
 
     let best_guess = cpa.best_guess();
-    println!("Best subkey guess: {:?}", best_guess);
+    println!("Best subkey guess: {best_guess:?}");
 
     // Let's plot correlation coefficients of the best guess
     let corr = cpa.corr();

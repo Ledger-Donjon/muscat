@@ -34,7 +34,7 @@ fn main() -> Result<()> {
     let dpa = processor.finalize();
 
     let best_guess = dpa.best_guess();
-    println!("Best subkey guess: {:?}", best_guess);
+    println!("Best subkey guess: {best_guess:?}");
 
     // Let's plot correlation coefficients of the best guess
     let differential_curves = dpa.differential_curves();

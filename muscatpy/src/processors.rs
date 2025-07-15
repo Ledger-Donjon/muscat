@@ -44,8 +44,7 @@ pub fn compute_mean<'py>(
     type_dispatch! { u8, u16, u32, u64, i8, i16, i32, i64, f32 }
 
     Err(PyTypeError::new_err(format!(
-        "Unsupported traces dtype: {}.",
-        sample_dtype
+        "Unsupported traces dtype: {sample_dtype}."
     )))
 }
 
@@ -87,8 +86,7 @@ pub fn compute_var<'py>(
     type_dispatch! { u8, u16, u32, u64, i8, i16, i32, i64, f32 }
 
     Err(PyTypeError::new_err(format!(
-        "Unsupported traces dtype: {}.",
-        sample_dtype
+        "Unsupported traces dtype: {sample_dtype}."
     )))
 }
 
