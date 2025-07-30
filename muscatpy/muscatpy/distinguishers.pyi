@@ -54,6 +54,36 @@ class Cpa:
     def max_corr(self) -> npt.NDArray[np.float32]:
         """Return the maximum Pearson correlation coefficient for each guess."""
 
+class CpaProcessor:
+    def __init__(self, num_samples: int, guess_range: int, dtype: np.dtype):
+        """Create a new CPA processor."""
+
+    def batch_update(
+        self,
+        trace_batch: Trace,
+        plaintext_batch: npt.NDArray[np.uint64],
+        leakage_model: Callable[[int, int], int],
+    ):
+        """Update the processor with a batch of traces and plaintexts."""
+
+    def finalize(self, leakage_model: Callable[[int, int], int]) -> Cpa:
+        """Finalize the computation and return the CPA result."""
+
+class CpaNormalProcessor:
+    def __init__(self, num_samples: int, batch_size: int, guess_range: int, dtype: np.dtype):
+        """Create a new CPA processor."""
+
+    def batch_update(
+        self,
+        trace_batch: Trace,
+        plaintext_batch: npt.NDArray[np.uint64],
+        leakage_model: Callable[[npt.NDArray[np.uint64], int], int],
+    ):
+        """Update the processor with a batch of traces and plaintexts."""
+
+    def finalize(self) -> Cpa:
+        """Finalize the computation and return the CPA result."""
+
 def compute_dpa(
     traces: Trace,
     plaintexts: npt.NDArray[np.uint64],
@@ -80,3 +110,18 @@ class Dpa:
 
     def max_differential_curves(self) -> npt.NDArray[np.float32]:
         """Return the maximum differential peak for each guess."""
+
+class DpaProcessor:
+    def __init__(self, num_samples: int, guess_range: int, dtype: np.dtype):
+        """Create a new DPA processor."""
+
+    def batch_update(
+        self,
+        trace_batch: Trace,
+        plaintext_batch: npt.NDArray[np.uint64],
+        selection_function: Callable[[int, int], bool],
+    ):
+        """Update the processor with a batch of traces and plaintexts."""
+
+    def finalize(self) -> Dpa:
+        """Finalize the computation and return the DPA result."""
