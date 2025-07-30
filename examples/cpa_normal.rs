@@ -28,7 +28,7 @@ fn main() -> Result<()> {
         traces.axis_chunks_iter(Axis(0), 100),
         plaintexts.axis_chunks_iter(Axis(0), 100),
     ) {
-        processor.update(
+        processor.batch_update(
             trace_batch.mapv(chipwhisperer_float_to_u16).view(),
             plaintext_batch,
             leakage_model,

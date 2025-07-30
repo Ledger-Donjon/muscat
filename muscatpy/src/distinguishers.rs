@@ -1,8 +1,11 @@
+use std::any::Any;
+
 use numpy::{
-    IntoPyArray, PyArrayDescrMethods, PyArrayMethods, PyUntypedArray, PyUntypedArrayMethods,
     array::{PyArray1, PyArray2},
     dtype,
     ndarray::Array2,
+    IntoPyArray, PyArrayDescr, PyArrayDescrMethods, PyArrayMethods, PyUntypedArray,
+    PyUntypedArrayMethods,
 };
 use pyo3::types::PyFunction;
 use pyo3::{exceptions::PyTypeError, prelude::*};
