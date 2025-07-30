@@ -4,7 +4,7 @@ use rayon::iter::{ParallelBridge, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{fs::File, iter::zip, ops::Add, path::Path};
 
-use crate::{distinguishers::cpa::Cpa, Error, Sample};
+use crate::{Error, Sample, distinguishers::cpa::Cpa};
 
 /// Compute the [`Cpa`] of the given traces using [`CpaProcessor`].
 ///
@@ -130,6 +130,7 @@ where
     }
 
     /// # Panics
+    /// - Panic in debug if `trace_batch.shape()[0] != self.batch_size`.
     /// - Panic in debug if `trace_batch.shape()[0] != plaintext_batch.shape()[0]`.
     /// - Panic in debug if `trace_batch.shape()[1] != self.num_samples`.
     pub fn batch_update<P, F>(
@@ -141,6 +142,7 @@ where
         P: Into<usize> + Copy,
         F: Fn(ArrayView1<usize>, usize) -> usize,
     {
+        debug_assert_eq!(trace_batch.shape()[0], self.batch_size);
         debug_assert_eq!(trace_batch.shape()[0], plaintext_batch.shape()[0]);
         debug_assert_eq!(trace_batch.shape()[1], self.num_samples);
 
@@ -156,11 +158,10 @@ where
             }
         }
 
-        self.cov = self.cov.clone()
-            + self
-                .values
-                .t()
-                .dot(&trace_batch.mapv(|x| <T as Sample>::Container::from(x).as_()));
+        self.cov += &self
+            .values
+            .t()
+            .dot(&trace_batch.mapv(|x| <T as Sample>::Container::from(x).as_()));
 
         // Update key leakages
         for i in 0..self.num_samples {
@@ -291,8 +292,8 @@ where
 mod tests {
     use std::iter::zip;
 
-    use super::{cpa, CpaProcessor};
-    use ndarray::{array, ArrayView1, Axis};
+    use super::{CpaProcessor, cpa};
+    use ndarray::{ArrayView1, Axis, array};
     use serde::Deserialize;
 
     #[test]

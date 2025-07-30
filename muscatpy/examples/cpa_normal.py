@@ -27,16 +27,28 @@ plaintexts = np.load(TRACES_DIR / "plaintexts.npy")
 traces = traces.astype(np.float32)
 plaintexts = plaintexts.astype(np.uint64)
 
+# Compute the CPA distinguisher using the `compute_cpa_normal` helper
 cpa = muscatpy.distinguishers.compute_cpa_normal(
     traces,
     plaintexts,
     256,
     0,
-    lambda guess, plaintext: hamming_weight(
-        muscatpy.leakage_model.aes.sbox(guess ^ plaintext)
+    lambda plaintext, guess: hamming_weight(
+        muscatpy.leakage_model.aes.sbox(plaintext ^ guess)
     ),
     200,
 )
+
+# Or using the lower level `CpaNormalProcessor` class
+leakage_model = lambda plaintext, guess: hamming_weight(
+    muscatpy.leakage_model.aes.sbox(int(plaintext[0]) ^ guess)
+)
+cpa_processor = muscatpy.distinguishers.CpaNormalProcessor(traces.shape[1], 200, 256, traces.dtype)
+for i in range(0, traces.shape[0], 200):
+    cpa_processor.batch_update(
+        traces[i : i + 200], plaintexts[i : i + 200], leakage_model
+    )
+cpa = cpa_processor.finalize()
 
 best_guess = cpa.best_guess()
 print("Best subkey guess:", best_guess)

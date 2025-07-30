@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::{fs::File, iter::zip, marker::PhantomData, ops::Add, path::Path};
 
 use crate::{
-    util::{argmax_by, argsort_by, max_per_row},
     Error, Sample,
+    util::{argmax_by, argsort_by, max_per_row},
 };
 
 /// Compute the [`Dpa`] of the given traces using [`DpaProcessor`].
@@ -305,8 +305,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{dpa, DpaProcessor};
-    use ndarray::{array, Array1, ArrayView1};
+    use super::{DpaProcessor, dpa};
+    use ndarray::{Array1, ArrayView1, array};
     use serde::Deserialize;
 
     #[test]
