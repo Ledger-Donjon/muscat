@@ -1,6 +1,6 @@
 use crate::{
-    Error, Sample,
     util::{argmax_by, argsort_by, max_per_row},
+    Error, Sample,
 };
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
 use num_traits::AsPrimitive;
@@ -108,13 +108,11 @@ where
     .fold(
         || CpaProcessor::new(traces.shape()[1], guess_range),
         |mut cpa, (trace_batch, plaintext_batch)| {
-            for i in 0..trace_batch.shape()[0] {
-                cpa.update(
-                    trace_batch.row(i),
-                    plaintext_batch.row(i)[target_byte],
-                    leakage_model,
-                );
-            }
+            cpa.batch_update(
+                trace_batch,
+                plaintext_batch.column(target_byte),
+                &leakage_model,
+            );
 
             cpa
         },
@@ -215,6 +213,25 @@ where
         }
 
         self.num_traces += 1;
+    }
+
+    /// # Panics
+    /// - Panic in debug if `trace_batch.shape()[0] != plaintext_batch.shape()[0]`
+    /// - Panic in debug if `trace_batch.shape()[1] != self.num_samples`.
+    pub fn batch_update<P, F>(
+        &mut self,
+        trace_batch: ArrayView2<T>,
+        plaintext_batch: ArrayView1<P>,
+        leakage_model: &F,
+    ) where
+        P: Into<usize> + Copy,
+        F: Fn(usize, usize) -> usize,
+    {
+        debug_assert_eq!(trace_batch.shape()[0], plaintext_batch.shape()[0]);
+
+        for (trace, plaintext) in zip(trace_batch.rows(), plaintext_batch.iter()) {
+            self.update(trace, *plaintext, leakage_model);
+        }
     }
 
     /// Finalize the calculation after feeding the overall traces.
@@ -330,7 +347,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{CpaProcessor, cpa};
+    use super::{cpa, CpaProcessor};
     use ndarray::array;
     use serde::Deserialize;
 

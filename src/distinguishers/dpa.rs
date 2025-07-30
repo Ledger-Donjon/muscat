@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::{fs::File, iter::zip, marker::PhantomData, ops::Add, path::Path};
 
 use crate::{
-    Error, Sample,
     util::{argmax_by, argsort_by, max_per_row},
+    Error, Sample,
 };
 
 /// Compute the [`Dpa`] of the given traces using [`DpaProcessor`].
@@ -80,13 +80,7 @@ where
     .fold(
         || DpaProcessor::new(traces.shape()[1], guess_range),
         |mut dpa, (trace_batch, metadata_batch)| {
-            for i in 0..trace_batch.shape()[0] {
-                dpa.update(
-                    trace_batch.row(i),
-                    metadata_batch[i].clone(),
-                    selection_function,
-                );
-            }
+            dpa.batch_update(trace_batch, metadata_batch, &selection_function);
 
             dpa
         },
@@ -201,6 +195,24 @@ where
         self.num_traces += 1;
     }
 
+    /// # Panics
+    /// - Panic in debug if `trace_batch.shape()[0] != metadata_batch.shape()[0]`
+    /// - Panic in debug if `trace_batch.shape()[1] != self.num_samples`.
+    pub fn batch_update<F>(
+        &mut self,
+        trace_batch: ArrayView2<T>,
+        metadata_batch: ArrayView1<M>,
+        selection_function: &F,
+    ) where
+        F: Fn(M, usize) -> bool,
+    {
+        debug_assert_eq!(trace_batch.shape()[0], metadata_batch.shape()[0]);
+
+        for (trace, metadata) in zip(trace_batch.rows(), metadata_batch.iter()) {
+            self.update(trace, metadata.clone(), selection_function);
+        }
+    }
+
     /// Finalizes the calculation after feeding the overall traces.
     pub fn finalize(&self) -> Dpa {
         let mut differential_curves = Array2::zeros((self.guess_range, self.num_samples));
@@ -293,8 +305,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{DpaProcessor, dpa};
-    use ndarray::{Array1, ArrayView1, array};
+    use super::{dpa, DpaProcessor};
+    use ndarray::{array, Array1, ArrayView1};
     use serde::Deserialize;
 
     #[test]

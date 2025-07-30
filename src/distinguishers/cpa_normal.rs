@@ -4,7 +4,7 @@ use rayon::iter::{ParallelBridge, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{fs::File, iter::zip, ops::Add, path::Path};
 
-use crate::{Error, Sample, distinguishers::cpa::Cpa};
+use crate::{distinguishers::cpa::Cpa, Error, Sample};
 
 /// Compute the [`Cpa`] of the given traces using [`CpaProcessor`].
 ///
@@ -68,7 +68,7 @@ where
     .fold(
         || CpaProcessor::new(traces.shape()[1], batch_size, guess_range),
         |mut cpa, (trace_batch, plaintext_batch)| {
-            cpa.update(trace_batch, plaintext_batch, leakage_model);
+            cpa.batch_update(trace_batch, plaintext_batch, leakage_model);
 
             cpa
         },
@@ -132,7 +132,7 @@ where
     /// # Panics
     /// - Panic in debug if `trace_batch.shape()[0] != plaintext_batch.shape()[0]`.
     /// - Panic in debug if `trace_batch.shape()[1] != self.num_samples`.
-    pub fn update<P, F>(
+    pub fn batch_update<P, F>(
         &mut self,
         trace_batch: ArrayView2<T>,
         plaintext_batch: ArrayView2<P>,
@@ -291,8 +291,8 @@ where
 mod tests {
     use std::iter::zip;
 
-    use super::{CpaProcessor, cpa};
-    use ndarray::{ArrayView1, Axis, array};
+    use super::{cpa, CpaProcessor};
+    use ndarray::{array, ArrayView1, Axis};
     use serde::Deserialize;
 
     #[test]
@@ -317,7 +317,7 @@ mod tests {
             traces.axis_chunks_iter(Axis(0), 1),
             plaintexts.axis_chunks_iter(Axis(0), 1),
         ) {
-            processor.update(
+            processor.batch_update(
                 trace.map(|&x| x as f32).view(),
                 plaintext.view(),
                 leakage_model,
@@ -358,7 +358,7 @@ mod tests {
             traces.axis_chunks_iter(Axis(0), 1),
             plaintexts.axis_chunks_iter(Axis(0), 1),
         ) {
-            processor.update(
+            processor.batch_update(
                 trace.map(|&x| x as f32).view(),
                 plaintext.view(),
                 leakage_model,
