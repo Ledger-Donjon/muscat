@@ -21,7 +21,7 @@ def compute_cpa(
     plaintexts: npt.NDArray[np.uint64],
     guess_range: int,
     target_byte: int,
-    leakage_func: Callable[[int, int], int],
+    leakage_model: Callable[[int, int], int],
     batch_size: int,
 ) -> Cpa:
     """Compute the [`Cpa`] of the given traces."""
@@ -31,7 +31,7 @@ def compute_cpa_normal(
     plaintexts: npt.NDArray[np.uint64],
     guess_range: int,
     target_byte: int,
-    leakage_func: Callable[[int, int], int],
+    leakage_model: Callable[[int, int], int],
     batch_size: int,
 ) -> Cpa:
     """Compute the [`Cpa`] of the given traces."""
@@ -70,7 +70,9 @@ class CpaProcessor:
         """Finalize the computation and return the CPA result."""
 
 class CpaNormalProcessor:
-    def __init__(self, num_samples: int, batch_size: int, guess_range: int, dtype: np.dtype):
+    def __init__(
+        self, num_samples: int, batch_size: int, guess_range: int, dtype: np.dtype
+    ):
         """Create a new CPA processor."""
 
     def batch_update(

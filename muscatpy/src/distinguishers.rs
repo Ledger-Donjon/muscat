@@ -38,13 +38,13 @@ pub fn compute_cpa<'py>(
     plaintexts: &Bound<'py, PyArray2<usize>>,
     guess_range: usize,
     target_byte: usize,
-    leakage_func: &Bound<'py, PyFunction>,
+    leakage_model: &Bound<'py, PyFunction>,
     batch_size: usize,
 ) -> PyResult<Cpa> {
     let mut modeled_leakages = Array2::zeros((guess_range, 256));
     for guess in 0..guess_range {
         for plaintext in 0..256 {
-            modeled_leakages[[guess, plaintext]] = leakage_func
+            modeled_leakages[[guess, plaintext]] = leakage_model
                 .call((plaintext, guess), None)
                 .unwrap()
                 .extract::<usize>()
@@ -207,13 +207,13 @@ pub fn compute_cpa_normal<'py>(
     plaintexts: &Bound<'py, PyArray2<usize>>,
     guess_range: usize,
     target_byte: usize,
-    leakage_func: &Bound<'py, PyFunction>,
+    leakage_model: &Bound<'py, PyFunction>,
     batch_size: usize,
 ) -> PyResult<Cpa> {
     let mut modeled_leakages = Array2::zeros((guess_range, 256));
     for guess in 0..guess_range {
         for plaintext in 0..256 {
-            modeled_leakages[[guess, plaintext]] = leakage_func
+            modeled_leakages[[guess, plaintext]] = leakage_model
                 .call((plaintext, guess), None)
                 .unwrap()
                 .extract::<usize>()
