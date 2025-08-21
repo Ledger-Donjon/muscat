@@ -29,7 +29,7 @@ impl Cpa {
     }
 
     /// Return the Pearson correlation coefficients.
-    pub fn corr(&self) -> ArrayView2<f32> {
+    pub fn corr(&self) -> ArrayView2<'_, f32> {
         self.corr.view()
     }
 
