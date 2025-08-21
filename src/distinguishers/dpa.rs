@@ -107,7 +107,7 @@ impl Dpa {
     }
 
     /// Return the differential curves
-    pub fn differential_curves(&self) -> ArrayView2<f32> {
+    pub fn differential_curves(&self) -> ArrayView2<'_, f32> {
         self.differential_curves.view()
     }
 
