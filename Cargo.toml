@@ -27,8 +27,8 @@ rayon = "1.10.0"
 indicatif = { version = "0.17.8", optional = true }
 ndarray-npy = "0.9.1"
 itertools = "0.13.0"
-thiserror = { version = "1.0.58" }
-dtw = { git = "https://github.com/Ledger-Donjon/dtw.git", rev = "0f8d7ec3bbdf2ca4ec8ea35feddb8d1db73e7d54" }
+thiserror = "1.0.58"
+dtw = "0.1.0"
 num-traits = "0.2.19"
 serde = { version = "1.0.214", features = ["derive"] }
 
