@@ -18,6 +18,8 @@ jobs:
 
     - name: Setup Rust toolchain
       uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        components: "clippy, rustfmt"
 
     - name: Build
       run: cargo build --verbose
@@ -42,10 +44,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Setup Rust caching
-      uses: Swatinem/rust-cache@v2
+    - name: Setup Rust toolchain
+      uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
-        workspaces: "muscatpy -> target"
+        components: "clippy, rustfmt"
+        cache-workspaces: "muscatpy -> target"
 
     - uses: actions/setup-python@v5
       with:
