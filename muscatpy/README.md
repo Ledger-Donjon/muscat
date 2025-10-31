@@ -6,10 +6,16 @@ This package provides python bindings to [muscat](https://github.com/Ledger-Donj
 - [maturin](https://github.com/PyO3/maturin)
 
 ## Install
+Build locally and install the wheel:
 ```sh
 maturin build --release
 # The name of the produced wheel depends on your python toolchain
 pip install target/wheels/muscatpy-*.whl
+```
+
+Or install it from the git repository:
+```sh
+pip install 'git+https://github.com/Ledger-Donjon/muscat.git#egg=muscatpy&subdirectory=muscatpy'
 ```
 
 ## License
