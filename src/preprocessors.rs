@@ -218,9 +218,9 @@ where
             cmp,
         );
 
-        let mut aligned_trace = Array1::zeros([trace.len()]);
+        let mut aligned_trace = Array1::zeros([trace.shape()[0]]);
         let mut k = 0;
-        for j in 0..trace.len() {
+        for j in 0..trace.shape()[0] {
             let mut count = T::Container::zero();
             let mut sum = T::Container::zero();
 

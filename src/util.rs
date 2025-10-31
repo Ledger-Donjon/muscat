@@ -70,7 +70,7 @@ where
 {
     let mut idx_max = 0;
 
-    for i in 0..array.len() {
+    for i in 0..array.shape()[0] {
         if compare(&array[i], &array[idx_max]).is_gt() {
             idx_max = i;
         }

@@ -46,9 +46,9 @@ where
     /// # Panics
     /// Panics in debug if the length of the trace is different form the size of [`MeanVar`].
     pub fn process(&mut self, trace: ArrayView1<T>) {
-        debug_assert!(trace.len() == self.size());
+        debug_assert!(trace.shape()[0] == self.size());
 
-        for i in 0..self.sum.len() {
+        for i in 0..self.sum.shape()[0] {
             let x = trace[i].into();
 
             self.sum[i] += x;
@@ -74,7 +74,7 @@ where
 
     /// Returns the trace size handled.
     pub fn size(&self) -> usize {
-        self.sum.len()
+        self.sum.shape()[0]
     }
 
     /// Returns the number of traces processed.

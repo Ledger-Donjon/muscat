@@ -15,8 +15,8 @@ pub fn compute_snr<'py>(
     get_class: &Bound<'py, PyFunction>,
     batch_size: usize,
 ) -> PyResult<Bound<'py, PyArray1<f32>>> {
-    let mut traces_class = Array1::zeros(traces.len());
-    for i in 0..traces_class.len() {
+    let mut traces_class = Array1::zeros(traces.shape()[0]);
+    for i in 0..traces_class.shape()[0] {
         traces_class[i] = get_class
             .call((i,), None)
             .unwrap()
@@ -64,8 +64,8 @@ pub fn compute_nicv<'py>(
     get_class: &Bound<'py, PyFunction>,
     batch_size: usize,
 ) -> PyResult<Bound<'py, PyArray1<f32>>> {
-    let mut traces_class = Array1::zeros(traces.len());
-    for i in 0..traces_class.len() {
+    let mut traces_class = Array1::zeros(traces.shape()[0]);
+    for i in 0..traces_class.shape()[0] {
         traces_class[i] = get_class
             .call((i,), None)
             .unwrap()

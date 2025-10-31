@@ -116,7 +116,7 @@ where
     /// # Panics
     /// - Panics in debug if the length of the trace is different from the size of [`SnrProcessor`].
     pub fn process(&mut self, trace: ArrayView1<T>, class: usize) {
-        debug_assert!(trace.len() == self.size());
+        debug_assert!(trace.shape()[0] == self.size());
         debug_assert!(class < self.num_classes());
 
         self.mean_var.process(trace);
@@ -168,7 +168,7 @@ where
 
     /// Return the number of classes handled.
     pub fn num_classes(&self) -> usize {
-        self.classes_count.len()
+        self.classes_count.shape()[0]
     }
 
     /// Determine if two [`SnrProcessor`] are compatible for addition.
@@ -351,7 +351,7 @@ where
     /// # Panics
     /// Panics in debug if the length of the trace is different from the size of [`Snr`].
     pub fn process(&mut self, trace: ArrayView1<T>, class: usize) {
-        debug_assert!(trace.len() == self.size());
+        debug_assert!(trace.shape()[0] == self.size());
         debug_assert!(class < self.num_classes());
 
         self.mean_var.process(trace);
@@ -397,7 +397,7 @@ where
 
     /// Returns the number of classes handled.
     pub fn num_classes(&self) -> usize {
-        self.classes_count.len()
+        self.classes_count.shape()[0]
     }
 
     /// Determine if two [`NicvProcessor`] are compatible for addition.
@@ -525,9 +525,9 @@ where
     /// * `class` - Indicates to which of the two partitions the given trace belongs.
     ///
     /// # Panics
-    /// Panics in debug if `trace.len() != self.size()`.
+    /// Panics in debug if `trace.shape()[0] != self.size()`.
     pub fn process(&mut self, trace: ArrayView1<T>, class: bool) {
-        debug_assert!(trace.len() == self.size());
+        debug_assert!(trace.shape()[0] == self.size());
 
         if class {
             self.mean_var_2.process(trace);
